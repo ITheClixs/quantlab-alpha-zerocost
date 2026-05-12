@@ -19,7 +19,7 @@ from quant_research_stack.artifacts import (
     should_include,
     write_json,
 )
-
+from quant_research_stack.budget import load_artifact_budget
 
 console = Console()
 
@@ -70,6 +70,9 @@ def build_plan(args: argparse.Namespace) -> tuple[dict[str, Any], list[dict[str,
     config = read_yaml(args.config)
     api = HfApi()
     items = load_all_items(set(args.types))
+    if args.item:
+        requested = set(args.item)
+        items = [item for item in items if item.id in requested]
     planned: list[dict[str, Any]] = []
 
     for item in items:
@@ -103,10 +106,11 @@ def build_plan(args: argparse.Namespace) -> tuple[dict[str, Any], list[dict[str,
     elif args.sort == "priority":
         planned.sort(key=lambda row: (row["priority"], row["estimated_size_bytes"] is None, row["estimated_size_bytes"] or 0))
 
+    local_budget = load_artifact_budget(config)
     budget_gb = float(args.max_gb or config["artifact_budget"]["max_total_gb"])
     reserve_gb = float(config["artifact_budget"].get("reserve_gb_for_processed_outputs", 0))
     download_budget = max(0.0, budget_gb - reserve_gb)
-    remaining = int(download_budget * GB)
+    remaining = max(0, int(download_budget * GB) - local_budget.used_bytes)
 
     for row in planned:
         estimated = row["estimated_size_bytes"]
@@ -126,6 +130,7 @@ def build_plan(args: argparse.Namespace) -> tuple[dict[str, Any], list[dict[str,
     summary = {
         "budget_gb": budget_gb,
         "reserve_gb_for_processed_outputs": reserve_gb,
+        "already_used_gb": bytes_to_gb(local_budget.used_bytes),
         "download_budget_gb": download_budget,
         "planned_download_gb": bytes_to_gb(sum(row["estimated_size_bytes"] or 0 for row in planned if row["decision"] == "download")),
         "remaining_download_budget_gb": bytes_to_gb(remaining),
@@ -179,6 +184,7 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Size-capped Hugging Face dataset/model downloader.")
     parser.add_argument("--config", default="configs/stack.yaml")
     parser.add_argument("--types", nargs="+", choices=["dataset", "model"], default=["dataset", "model"])
+    parser.add_argument("--item", action="append", default=[], help="Download only specific Hugging Face repo ids.")
     parser.add_argument("--sort", choices=["size", "priority"], default="size")
     parser.add_argument("--max-gb", type=float, default=None)
     parser.add_argument("--dry-run", action="store_true")
@@ -201,4 +207,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     sys.exit(main())
-

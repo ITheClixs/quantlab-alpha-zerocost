@@ -1,54 +1,72 @@
-# Quant Research Machine Learning Workspace
+# Quant Research LLM Workspace
 
-This workspace is organized for building a local quantitative-research model stack:
+This repository builds a local-first quantitative trading research system whose primary interface is a large language model, but whose claims are accepted only through leakage-safe market benchmarks.
 
-- market-data datasets for supervised price, volatility, and order-flow prediction
-- paper-derived research corpora for retrieval, hypothesis generation, and LLM mentoring
-- local time-series and finance LLM models that fit a MacBook Air M4 with 24 GB unified memory
-- reproducible manifests and scripts with a hard combined artifact budget
+The target model role is not a generic chatbot. It is a local quantitative researcher that reads market data, retrieves papers, proposes structured signals, explains why a signal may work, and then lets a Jane Street-style benchmark decide whether the signal has value.
 
-Raw datasets and model weights are intentionally ignored by git. Recreate them from:
+## Operating Model
+
+The system is split into three layers:
+
+1. **Market layer**: OHLCV, order-book, return, volatility, depth, imbalance, and Jane Street tabular features.
+2. **LLM research layer**: local GGUF inference, paper retrieval, structured signal generation, hypothesis critique, and mentoring-style explanations.
+3. **Validation layer**: time-ordered folds, weighted zero-mean R2, leakage checks, baselines, and generated reports.
+
+The LLM may be first in the workflow, but it is never trusted without validation. A signal becomes useful only after it improves an out-of-sample metric against simple baselines.
+
+## Local Constraints
+
+- No paid APIs.
+- No cloud training jobs.
+- No real-money broker integration.
+- Free downloads from Kaggle, Hugging Face, arXiv, and open sources are allowed.
+- Total local artifacts must stay under `150 GB`.
+- 20B-class LLMs are used through quantized local inference, not full local training.
+
+The primary 20B-class target is a quantized GGUF model such as `bartowski/Mistral-Small-Instruct-2409-GGUF`. The installed `TheBloke/finance-LLM-13B-GGUF` remains the fallback model when the 22B runtime is unavailable.
+
+## Current Layout
+
+```text
+configs/                  stack, paths, budgets, model/runtime settings
+manifests/                Hugging Face, Kaggle, and paper manifests
+scripts/                  download and preparation entrypoints
+src/quant_research_stack/ reusable implementation modules
+tests/                    unit tests and fixture-level validation
+data/raw/                 ignored downloaded source data
+data/processed/           ignored train-ready parquet/jsonl outputs
+models/huggingface/       ignored local model snapshots and GGUFs
+reports/                  generated plans, inventories, metrics, and benchmark reports
+```
+
+## Recreate Data And Models
+
+Dry-run before any large operation:
 
 ```bash
+uv run python scripts/report_artifact_budget.py
 uv run python scripts/download_hf_artifacts.py --dry-run --sort size
-uv run python scripts/download_hf_artifacts.py --sort size
+uv run python scripts/download_kaggle_artifacts.py --dry-run
+```
+
+Prepare existing market and research corpora:
+
+```bash
 uv run python scripts/prepare_market_data.py
+uv run python scripts/prepare_orderbook_data.py
 uv run python scripts/prepare_research_corpus.py
 ```
 
-The default artifact budget is `100 GB` across Hugging Face datasets, Hugging Face models,
-and downloaded paper PDFs. The downloader sorts candidates by estimated size and stops before
-crossing the budget.
+Run the local Jane Street benchmark after the Kaggle dataset is present:
 
-## Stack
-
-The recommended stack keeps prediction and explanation separate:
-
-1. Market features: OHLCV, returns, realized volatility, spreads, order-flow imbalance,
-   depth imbalance, and forward returns.
-2. Labels: next-horizon direction, forward return, volatility regime, and simple
-   triple-barrier-style labels.
-3. Forecasting models: Chronos, Kronos, Granite TTM, TimeMoE, plus conventional baselines.
-4. LLM/research role: explain signals, retrieve papers, generate strategy hypotheses,
-   critique validation, and mentor the terminal workflow.
-5. Validation: walk-forward splits, transaction-cost-aware backtests, and leakage controls.
-
-## Layout
-
-```text
-configs/                 global stack and budget settings
-manifests/               dataset, model, and paper manifests
-scripts/                 download, inventory, and preparation entrypoints
-src/quant_research_stack shared Python utilities
-data/raw/                ignored raw datasets and PDFs
-data/processed/          ignored train-ready parquet/jsonl artifacts
-models/huggingface/      ignored local model snapshots
-reports/                 generated inventory/download reports
+```bash
+uv run python scripts/run_jane_street_benchmark.py --sample-rows 200000
 ```
 
-## Important
+## Benchmark Target
 
-This workspace prepares research and training data. It does not claim that any model is
-profitable. Trading performance must be measured with out-of-sample walk-forward tests,
-costs, slippage, latency, and drawdown constraints before any live use.
+The first formal benchmark target is `jane-street-real-time-market-data-forecasting`. The local harness evaluates `responder_6` with weighted zero-mean R2 and time-ordered validation. The goal is to iteratively improve the score, not to claim rank without a reproducible local measurement.
 
+## Safety Standard
+
+This repository is for research and competition-style benchmarking. It does not claim profitability. Any trading bot integration must come after repeatable out-of-sample validation, cost/slippage modeling, risk limits, and paper-trading simulation.

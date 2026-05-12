@@ -1,391 +1,127 @@
 # CLAUDE.md
 
-This file defines how Claude Code or any similar coding agent must behave inside this repository.
+This file defines how coding agents should behave in this repository.
 
-Project name:
+## Project Goal
 
-```text
-QuantLab
-```
+Build a local-first large-language-model quantitative research system for market prediction experiments. The system should be original, rigorous, and benchmark-driven: an LLM proposes structured signals and explanations, while local benchmark code decides whether those signals are useful.
 
-Project goal:
+The first benchmark anchor is Kaggle `jane-street-real-time-market-data-forecasting`.
 
-```text
-Build a rigorous local quantitative finance machine learning research system on Apple Silicon.
-```
-
-Target machine:
+## Hard Constraints
 
 ```text
-MacBook Air M4
-24 GB unified memory
-macOS
-Apple Silicon MPS available through PyTorch
-MLX available for local LLM inference
+Local Mac execution only.
+No paid APIs.
+No cloud jobs.
+No real-money broker integration.
+No random financial time-series splits.
+No target leakage.
+No future-derived features.
+No full local training of 20B-class models.
+No artifact footprint above 150 GB.
 ```
 
-Primary pipeline:
+Free downloads from Kaggle, Hugging Face, arXiv, and open web sources are allowed only when the artifact budget remains below the configured ceiling.
+
+## Actual Repository Shape
+
+Reusable code lives under:
 
 ```text
-raw data
-  -> cleaned panel data
-  -> features
-  -> labels
-  -> walk-forward validation
-  -> model training
-  -> predictions
-  -> backtest
-  -> paper trading simulator
+src/quant_research_stack/
 ```
 
----
-
-## 1. Absolute project rules
-
-Do not violate these rules:
+Primary ignored artifacts live under:
 
 ```text
-1. Do not use random train-test split for financial time series.
-2. Do not use future data in features.
-3. Do not fit scalers, imputers, encoders, or normalizers on validation or test data.
-4. Do not evaluate only accuracy.
-5. Do not report a strategy without transaction costs and turnover.
-6. Do not connect to a real brokerage API.
-7. Do not implement live real-money trading.
-8. Do not train a 12B to 14B parameter model from scratch.
-9. Do not full-fine-tune a 12B to 14B parameter model locally.
-10. Do not download massive datasets without checking disk and user intent.
+data/raw/
+data/processed/
+models/huggingface/
+reports/
 ```
 
----
+Do not create a parallel `src/quantlab/` package unless the repository is intentionally migrated.
 
-## 2. Preferred implementation order
-
-Implement in this order:
+## Preferred Implementation Order
 
 ```text
-1. Project scaffolding
-2. Environment validation
-3. Dataset download scripts
-4. Raw to Parquet conversion
-5. Canonical panel schema
-6. Feature generation
-7. Label generation
-8. Walk-forward split
-9. Leakage tests
-10. Ridge baseline
-11. LightGBM baseline
-12. Cross-sectional backtest
-13. Report generation
-14. G-Research crypto pipeline
-15. Optiver pipeline
-16. Jane Street pipeline
-17. FinBERT sentiment features
-18. Small PyTorch MLP
-19. Sequence models
-20. Paper trading simulator
-21. Optional MLX local LLM assistant
+1. Documentation and architecture alignment.
+2. Artifact budget accounting.
+3. Free-data downloaders with dry-run mode.
+4. Jane Street 2024 ingestion and scoring harness.
+5. Local LLM runtime wrapper.
+6. RAG over paper/research chunks.
+7. Structured LLM signal schema and parser.
+8. Baseline benchmark reports.
+9. Iterative score improvements.
+10. Paper-trading simulator only after benchmark validation.
 ```
 
----
+## LLM-First Policy
 
-## 3. Repository structure
-
-Expected structure:
+The LLM is the primary research interface. It should:
 
 ```text
-QuantLab/
-  data/
-    raw/
-    processed/
-    features/
-    labels/
-    splits/
-    backtests/
-    paper_trading/
-  models/
-    tree/
-    torch/
-    sentiment/
-    embeddings/
-    llm/
-    mlx/
-  notebooks/
-  reports/
-  experiments/
-  logs/
-  config/
-  scripts/
-  src/
-    quantlab/
-      data/
-      features/
-      labels/
-      splits/
-      models/
-      backtest/
-      paper/
-      execution/
-      research/
-      utils/
-  tests/
+retrieve research
+summarize market context
+propose signal hypotheses
+emit structured prediction JSON
+explain feature relevance
+criticize leakage and overfitting risk
+mentor the terminal workflow
 ```
 
-Do not put important project logic only in notebooks. Notebooks may be used for exploration, but reusable logic must live under `src/quantlab`.
+The LLM must not be trusted by default. Invalid JSON, missing citations, missing feature evidence, or unsupported confidence must be rejected.
 
----
+## Local Model Policy
 
-## 4. Coding style
-
-Use:
+Use quantized local inference for large models:
 
 ```text
-Python 3.11
-type hints
-dataclasses or pydantic for configuration
-Polars or DuckDB for large preprocessing
-Pandas for model interface when necessary
-Parquet for intermediate storage
-Joblib for tree model artifacts
-Torch save for neural model artifacts
-JSON for metrics
-YAML for configs
+primary target: 22B-class GGUF when downloaded and runnable
+fallback target: installed 13B finance GGUF
+small helpers: finance embeddings, FinBERT, Chronos/Kronos/TimeMoE-style local models
 ```
 
-Prefer:
+20B-class local models may be used for inference, prompt/RAG augmentation, and signal generation. Full local training is out of scope on the Mac. Smaller adapters, distilled models, or benchmark-specific tabular predictors may be trained locally when tests and runtime allow.
+
+## Jane Street Benchmark Rules
+
+For `jane-street-real-time-market-data-forecasting`:
 
 ```text
-small composable modules
-deterministic functions
-explicit config
-clear file paths
-reproducible outputs
+target responder: responder_6
+primary metric: weighted zero-mean R2
+validation: time-ordered folds
+baseline floor: constant/zero predictor and simple local model
+report path: reports/jane_street_benchmark.json
 ```
 
-Avoid:
+Never shuffle dates. Never use responder columns from future rows as features. Never present a public leaderboard claim unless produced by an actual Kaggle submission.
+
+## Testing Commands
+
+Run before completion:
+
+```bash
+uv run python -m compileall scripts src
+uv run pytest -q
+uv run ruff check src tests scripts
+```
+
+If `ruff` reports pre-existing style issues outside the edited area, document them rather than hiding them.
+
+## Completion Criteria
+
+Before calling work complete:
 
 ```text
-hidden global state
-implicit notebook variables
-hardcoded absolute paths except $HOME/QuantLab
-large monolithic scripts
-silent exception swallowing
+docs reflect current architecture
+tests pass
+budget report works
+benchmark harness has fixture coverage
+LLM parser has fixture coverage
+reports are reproducible
+git status is clean or unrelated user changes are explicitly noted
 ```
-
----
-
-## 5. Financial ML methodology
-
-### 5.1 Features
-
-Every feature at time `t` must be computable with information available at or before time `t`.
-
-Allowed feature families:
-
-```text
-past returns
-rolling volatility
-moving average distance
-volume surprise
-cross-sectional ranks
-sector-neutral ranks if sector metadata exists
-market beta estimates using only past windows
-sentiment aggregates from already-published news
-```
-
-Forbidden features:
-
-```text
-future returns
-future rolling statistics
-future volume
-target-derived transformations
-post-event data not available at prediction time
-```
-
-### 5.2 Labels
-
-Use forward labels:
-
-```text
-fwd_ret_h = close[t + h] / close[t] - 1
-label_up_h = 1 if fwd_ret_h > threshold else 0
-rank_label_h = cross-sectional rank of fwd_ret_h within date
-```
-
-Always document the prediction horizon.
-
-### 5.3 Splits
-
-Use walk-forward validation:
-
-```text
-train on past
-validate on later period
-test on still later period
-roll forward
-```
-
-Never shuffle financial observations across time.
-
----
-
-## 6. Model hierarchy
-
-Implement models in this order:
-
-```text
-1. naive momentum or mean reversion
-2. Ridge regression
-3. Logistic regression
-4. LightGBM
-5. XGBoost
-6. CatBoost
-7. small PyTorch MLP
-8. LSTM or GRU
-9. temporal CNN
-10. compact Transformer encoder
-```
-
-Tree models are the default for tabular financial data. Neural networks must beat strong tabular baselines before they are treated as useful.
-
----
-
-## 7. Backtesting requirements
-
-Backtests must include:
-
-```text
-transaction costs
-slippage
-turnover
-gross returns
-net returns
-equity curve
-Sharpe ratio
-Sortino ratio
-maximum drawdown
-hit rate
-average position count
-average turnover
-```
-
-For cross-sectional equity strategy:
-
-```text
-sort assets by prediction each date
-long top quantile
-short bottom quantile if allowed
-equal-weight or score-weight
-clip position size
-compute next-period realized return
-subtract costs
-```
-
-Do not claim profitability from an in-sample or validation-only result.
-
----
-
-## 8. Paper trading requirements
-
-Paper trading must come after backtesting.
-
-Required modules:
-
-```text
-paper/data_feed.py
-paper/feature_service.py
-paper/model_service.py
-paper/portfolio_service.py
-paper/risk_service.py
-paper/broker_simulator.py
-paper/state_store.py
-paper/report.py
-```
-
-Paper trading must use the same feature functions as backtesting.
-
----
-
-## 9. Apple Silicon policy
-
-Use PyTorch MPS when available:
-
-```python
-import torch
-DEVICE = torch.device("mps" if torch.backends.mps.is_available() else "cpu")
-```
-
-If MPS fails for a model, fallback to CPU and log the reason.
-
-Use MLX for local LLM inference and optional tiny LoRA experiments.
-
-12B to 14B parameter models are allowed only as quantized inference or very small LoRA experiments. They are not the trading model.
-
----
-
-## 10. Local LLM policy
-
-Allowed use of local LLMs:
-
-```text
-coding assistant
-research summarization
-feature brainstorming
-documentation summarization
-small financial text classification experiments
-```
-
-Disallowed use:
-
-```text
-direct trading decisions
-unvalidated market prediction
-training from scratch
-full fine-tuning large models locally
-```
-
----
-
-## 11. Testing requirements
-
-Add tests for:
-
-```text
-forward return label direction
-no future leakage in features
-walk-forward fold ordering
-backtest cost calculation
-portfolio weight constraints
-model output shape
-missing data handling
-```
-
-Run:
-
-```zsh
-PYTHONPATH=src pytest -q
-ruff check src tests
-```
-
----
-
-## 12. Completion criteria for first milestone
-
-The first milestone is complete only if this exists:
-
-```text
-experiments/jpx_baseline/
-  metadata.json
-  ridge/
-    metrics.json
-    predictions.parquet
-  lightgbm/
-    metrics.json
-    predictions.parquet
-    backtest.parquet
-    backtest_summary.json
-```
-
-The result must be reproducible from a clean repository using documented commands.
-

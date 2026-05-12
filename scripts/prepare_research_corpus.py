@@ -4,14 +4,13 @@ import argparse
 import json
 import re
 import sys
+from collections.abc import Iterable
 from pathlib import Path
-from typing import Iterable
 
 from pypdf import PdfReader
 from rich.console import Console
 
 from quant_research_stack.artifacts import read_yaml
-
 
 console = Console()
 
