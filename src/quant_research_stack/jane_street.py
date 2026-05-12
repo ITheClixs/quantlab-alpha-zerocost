@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+import joblib
 import numpy as np
 import polars as pl
 from sklearn.linear_model import Ridge
@@ -28,6 +29,7 @@ class BenchmarkResult:
     metric: str
     zero_baseline_r2: float
     ridge_r2: float | None
+    ridge_artifact: str | None
     limitations: tuple[str, ...]
 
     def as_dict(self) -> dict[str, Any]:
@@ -41,6 +43,7 @@ class BenchmarkResult:
             "metric": self.metric,
             "zero_baseline_r2": self.zero_baseline_r2,
             "ridge_r2": self.ridge_r2,
+            "ridge_artifact": self.ridge_artifact,
             "limitations": list(self.limitations),
         }
 
@@ -86,36 +89,47 @@ def time_ordered_train_validation_split(frame: pl.DataFrame, validation_fraction
     return train, validation
 
 
-def find_train_parquet(input_root: str | Path) -> Path:
+def find_train_parquet_paths(input_root: str | Path) -> list[Path]:
     root = Path(input_root)
     if root.is_file():
-        return root
+        return [root]
     if not root.exists():
         raise FileNotFoundError(f"Jane Street input root does not exist: {root}")
-    preferred = sorted(path for path in root.rglob("*.parquet") if "train" in path.as_posix().lower())
+    train_dir = root / "train.parquet"
+    if train_dir.is_dir():
+        parts = sorted(path for path in train_dir.rglob("*.parquet") if path.is_file() and not path.name.startswith("."))
+        if parts:
+            return parts
+    preferred = sorted(path for path in root.rglob("*.parquet") if path.is_file() and "train" in path.as_posix().lower())
     if preferred:
-        return preferred[0]
-    parquet_files = sorted(root.rglob("*.parquet"))
+        return preferred
+    parquet_files = sorted(path for path in root.rglob("*.parquet") if path.is_file())
     if not parquet_files:
         raise FileNotFoundError(f"No parquet files found under {root}")
-    return parquet_files[0]
+    return [parquet_files[0]]
 
 
 def load_train_frame(input_root: str | Path, sample_rows: int | None = None) -> tuple[Path, pl.DataFrame]:
-    train_path = find_train_parquet(input_root)
-    scan = pl.scan_parquet(train_path)
+    train_paths = find_train_parquet_paths(input_root)
+    scan = pl.scan_parquet([str(path) for path in train_paths])
     if sample_rows is not None:
         scan = scan.head(sample_rows)
     frame = scan.collect()
     validate_jane_street_frame(frame)
-    return train_path, frame
+    return train_paths[0], frame
 
 
 def _frame_to_numpy(frame: pl.DataFrame, cols: list[str]) -> np.ndarray:
     return frame.select(cols).fill_null(0.0).to_numpy().astype(np.float32)
 
 
-def run_local_baseline(input_root: str | Path, *, sample_rows: int | None = None, validation_fraction: float = 0.2) -> BenchmarkResult:
+def run_local_baseline(
+    input_root: str | Path,
+    *,
+    sample_rows: int | None = None,
+    validation_fraction: float = 0.2,
+    output_root: str | Path | None = None,
+) -> BenchmarkResult:
     train_path, frame = load_train_frame(input_root, sample_rows=sample_rows)
     cols = feature_columns(frame)
     train, validation = time_ordered_train_validation_split(frame, validation_fraction=validation_fraction)
@@ -126,11 +140,18 @@ def run_local_baseline(input_root: str | Path, *, sample_rows: int | None = None
     zero_score = weighted_zero_mean_r2(y_valid, zero_pred, weights)
 
     ridge_score: float | None
+    ridge_artifact: str | None = None
     try:
         model = make_pipeline(StandardScaler(), Ridge(alpha=1.0, random_state=42))
         model.fit(_frame_to_numpy(train, cols), train[TARGET_COLUMN].to_numpy())
         ridge_pred = model.predict(_frame_to_numpy(validation, cols))
         ridge_score = weighted_zero_mean_r2(y_valid, ridge_pred, weights)
+        if output_root is not None:
+            model_dir = Path(output_root)
+            model_dir.mkdir(parents=True, exist_ok=True)
+            artifact_path = model_dir / "jane_street_ridge.joblib"
+            joblib.dump({"model": model, "features": cols, "target": TARGET_COLUMN}, artifact_path)
+            ridge_artifact = str(artifact_path)
     except Exception:
         ridge_score = None
 
@@ -144,6 +165,7 @@ def run_local_baseline(input_root: str | Path, *, sample_rows: int | None = None
         metric="weighted_zero_mean_r2",
         zero_baseline_r2=zero_score,
         ridge_r2=ridge_score,
+        ridge_artifact=ridge_artifact,
         limitations=(
             "Local validation only; not a Kaggle leaderboard score.",
             "Ridge baseline is a sanity check, not a tuned competition model.",

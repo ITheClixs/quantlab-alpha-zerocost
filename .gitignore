@@ -16,3 +16,4 @@ reports/*.json
 reports/*.jsonl
 reports/*.csv
 reports/*.parquet
+reports/*.log
