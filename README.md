@@ -70,3 +70,42 @@ The first formal benchmark target is `jane-street-real-time-market-data-forecast
 ## Safety Standard
 
 This repository is for research and competition-style benchmarking. It does not claim profitability. Any trading bot integration must come after repeatable out-of-sample validation, cost/slippage modeling, risk limits, and paper-trading simulation.
+
+## Corpus Reproduction
+
+The target on-disk corpus is approximately 150 GB. It splits across four buckets (see `configs/stack.yaml::bucket_budgets`):
+
+| Bucket | Budget | Source |
+|---|---|---|
+| `hf_datasets` | 50 GB | `manifests/datasets.yaml` |
+| `kaggle` | 40 GB | `manifests/kaggle.yaml` (requires `~/.kaggle/kaggle.json`) |
+| `models` | 40 GB | `manifests/models.yaml` |
+| `papers_and_derived` | 20 GB | `manifests/papers.yaml` + chunked JSONL + Parquet shards + Q&A pairs |
+
+Full reproduction sequence:
+
+```bash
+uv sync --extra dev --extra llm
+
+# Optional but required for gated models and Kaggle competitions:
+huggingface-cli login
+# Place Kaggle token at ~/.kaggle/kaggle.json (chmod 600), accept competition rules on Kaggle website.
+
+# Papers and derived training formats
+PYTHONPATH=src uv run python scripts/download_papers.py
+PYTHONPATH=src uv run python scripts/prepare_research_corpus.py
+PYTHONPATH=src uv run python scripts/paper_corpus_to_parquet.py
+PYTHONPATH=src uv run python scripts/paper_corpus_to_instructions.py
+
+# Hugging Face datasets and models (priority order, size-capped)
+PYTHONPATH=src uv run python scripts/download_hf_artifacts.py --types dataset --max-gb 50
+PYTHONPATH=src uv run python scripts/download_hf_artifacts.py --types model --max-gb 40
+
+# Kaggle competitions and datasets
+PYTHONPATH=src uv run python scripts/download_kaggle_artifacts.py
+
+# Final inventory and dedup report
+PYTHONPATH=src uv run python scripts/dedupe_and_verify.py
+```
+
+The final report at `reports/corpus_inventory.json` records SHA256, size, bucket, and duplicate groups for every file across the four buckets.
