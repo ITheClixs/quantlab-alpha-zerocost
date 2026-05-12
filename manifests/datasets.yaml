@@ -159,3 +159,146 @@ datasets:
     license_hint: mit
     purpose: "S&P 500 10-K filings for fundamental/risk research corpus."
 
+  - id: roneneldan/TinyStories
+    group: general_nlp
+    priority: 900
+    license_hint: cdla-sharing-1.0
+    topics: [general_nlp]
+    purpose: "Small synthetic story corpus for tiny-LM experiments and NLP plumbing."
+
+  - id: Salesforce/wikitext
+    group: general_nlp
+    priority: 910
+    license_hint: cc-by-sa-3.0
+    topics: [general_nlp]
+    purpose: "WikiText-103 for general language modeling baselines."
+
+  - id: stanfordnlp/imdb
+    group: general_nlp_sentiment
+    priority: 920
+    license_hint: other
+    topics: [general_nlp, sentiment]
+    purpose: "IMDB sentiment baseline for NLP plumbing."
+
+  - id: uoft-cs/cifar10
+    group: vision_baseline
+    priority: 930
+    license_hint: mit
+    topics: [vision]
+    allow_patterns:
+      - "*.parquet"
+      - "*.json"
+      - "*.md"
+      - "README*"
+    purpose: "CIFAR-10 vision baseline for general DL plumbing."
+
+  - id: takala/financial_phrasebank
+    group: finance_sentiment
+    priority: 940
+    license_hint: cc-by-nc-sa-3.0
+    topics: [sentiment, news]
+    purpose: "Financial PhraseBank — small high-quality finance sentiment labels."
+
+  - id: zeroshot/twitter-financial-news-sentiment
+    group: finance_sentiment
+    priority: 950
+    license_hint: mit
+    topics: [sentiment, news]
+    purpose: "Twitter finance sentiment labels."
+
+  - id: zeroshot/twitter-financial-news-topic
+    group: finance_topic
+    priority: 960
+    license_hint: mit
+    topics: [news]
+    purpose: "Twitter finance topic labels."
+
+  - id: FinGPT/fingpt-sentiment-train
+    group: finance_sentiment_instruction
+    priority: 970
+    license_hint: mit
+    topics: [sentiment, instruction]
+    purpose: "FinGPT sentiment training set in instruction form."
+
+  - id: TheFinAI/fingpt-fiqa_qa
+    group: finance_qa
+    priority: 980
+    license_hint: mit
+    topics: [instruction]
+    purpose: "FiQA financial Q&A pairs."
+
+  - id: TheFinAI/flare-fpb
+    group: finance_benchmark
+    priority: 990
+    license_hint: cc-by-nc-4.0
+    topics: [sentiment]
+    purpose: "FLARE FPB finance benchmark split."
+
+  - id: Open-Orca/OpenOrca
+    group: reasoning_instruction
+    priority: 1000
+    license_hint: mit
+    topics: [reasoning, instruction]
+    allow_patterns:
+      - "*.parquet"
+      - "*.json"
+      - "README*"
+    purpose: "Broad instruction-following corpus for reasoning models."
+
+  - id: hendrycks/competition_math
+    group: math_reasoning
+    priority: 1010
+    license_hint: mit
+    topics: [reasoning]
+    purpose: "Competition math problems with step-by-step solutions."
+
+  - id: glaive-ai/glaive-code-assistant
+    group: code_instruction
+    priority: 1020
+    license_hint: apache-2.0
+    topics: [code, instruction]
+    allow_patterns:
+      - "*.parquet"
+      - "*.json"
+      - "README*"
+    purpose: "Code assistant Q&A for coding LLM tuning experiments."
+
+  - id: bigcode/the-stack-smol
+    group: code_corpus_small
+    priority: 1030
+    license_hint: other
+    topics: [code]
+    allow_patterns:
+      - "*.parquet"
+      - "*.json"
+      - "README*"
+    purpose: "Small slice of The Stack for code modeling baselines."
+
+  - id: HuggingFaceH4/MATH-500
+    group: math_reasoning_bench
+    priority: 1040
+    license_hint: mit
+    topics: [reasoning]
+    purpose: "MATH-500 benchmark slice."
+
+  - id: gsm8k
+    group: math_reasoning_bench
+    priority: 1050
+    license_hint: mit
+    topics: [reasoning]
+    purpose: "Grade-school math word problems for reasoning evals."
+
+  - id: monash_tsf
+    group: time_series_benchmark
+    priority: 1060
+    license_hint: cc-by-4.0
+    topics: [time_series]
+    purpose: "Monash time-series forecasting archive."
+
+  - id: ETT
+    group: time_series_benchmark
+    priority: 1070
+    license_hint: cc-by-4.0
+    topics: [time_series]
+    purpose: "Electricity Transformer Temperature standard forecasting benchmark."
+
