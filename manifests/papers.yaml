@@ -227,3 +227,409 @@ papers:
     priority: 999
     open_text: false
     notes: "Book reference; do not download copyrighted text automatically."
+
+  - title: "Attention Is All You Need"
+    source: "arxiv"
+    arxiv_id: "1706.03762"
+    year: 2017
+    tags: ["transformer", "attention", "deep_learning"]
+    training_category: "deep_learning_foundations"
+    priority: 300
+    open_text: true
+    purpose: "Foundational transformer architecture reference."
+
+  - title: "BERT: Pre-training of Deep Bidirectional Transformers for Language Understanding"
+    source: "arxiv"
+    arxiv_id: "1810.04805"
+    year: 2018
+    tags: ["bert", "pretraining", "nlp"]
+    training_category: "nlp_foundations"
+    priority: 310
+    open_text: true
+    purpose: "BERT foundation for FinBERT lineage."
+
+  - title: "Deep Residual Learning for Image Recognition"
+    source: "arxiv"
+    arxiv_id: "1512.03385"
+    year: 2015
+    tags: ["resnet", "computer_vision", "deep_learning"]
+    training_category: "deep_learning_foundations"
+    priority: 320
+    open_text: true
+    purpose: "ResNet foundation reference."
+
+  - title: "Adam: A Method for Stochastic Optimization"
+    source: "arxiv"
+    arxiv_id: "1412.6980"
+    year: 2014
+    tags: ["optimizer", "training", "deep_learning"]
+    training_category: "deep_learning_foundations"
+    priority: 330
+    open_text: true
+    purpose: "Adam optimizer reference."
+
+  - title: "LoRA: Low-Rank Adaptation of Large Language Models"
+    source: "arxiv"
+    arxiv_id: "2106.09685"
+    year: 2021
+    tags: ["peft", "lora", "fine_tuning"]
+    training_category: "training_methods"
+    priority: 340
+    open_text: true
+    purpose: "LoRA reference for small local adapter experiments."
+
+  - title: "QLoRA: Efficient Finetuning of Quantized LLMs"
+    source: "arxiv"
+    arxiv_id: "2305.14314"
+    year: 2023
+    tags: ["qlora", "quantization", "fine_tuning"]
+    training_category: "training_methods"
+    priority: 350
+    open_text: true
+    purpose: "QLoRA reference for memory-efficient fine-tuning."
+
+  - title: "FlashAttention: Fast and Memory-Efficient Exact Attention with IO-Awareness"
+    source: "arxiv"
+    arxiv_id: "2205.14135"
+    year: 2022
+    tags: ["attention", "gpu", "efficiency"]
+    training_category: "gpu_parallel"
+    priority: 360
+    open_text: true
+    purpose: "GPU attention efficiency reference."
+
+  - title: "Megatron-LM: Training Multi-Billion Parameter Language Models Using Model Parallelism"
+    source: "arxiv"
+    arxiv_id: "1909.08053"
+    year: 2019
+    tags: ["model_parallelism", "gpu", "large_language_models"]
+    training_category: "gpu_parallel"
+    priority: 370
+    open_text: true
+    purpose: "Model parallelism reference."
+
+  - title: "ZeRO: Memory Optimizations Toward Training Trillion Parameter Models"
+    source: "arxiv"
+    arxiv_id: "1910.02054"
+    year: 2019
+    tags: ["zero", "memory", "distributed_training"]
+    training_category: "gpu_parallel"
+    priority: 380
+    open_text: true
+    purpose: "ZeRO memory optimization reference."
+
+  - title: "Mixed Precision Training"
+    source: "arxiv"
+    arxiv_id: "1710.03740"
+    year: 2017
+    tags: ["mixed_precision", "fp16", "training"]
+    training_category: "gpu_parallel"
+    priority: 390
+    open_text: true
+    purpose: "Mixed precision training reference."
+
+  - title: "Reformer: The Efficient Transformer"
+    source: "arxiv"
+    arxiv_id: "2001.04451"
+    year: 2020
+    tags: ["transformer", "efficiency"]
+    training_category: "deep_learning_foundations"
+    priority: 400
+    open_text: true
+    purpose: "Efficient transformer reference."
+
+  - title: "Longformer: The Long-Document Transformer"
+    source: "arxiv"
+    arxiv_id: "2004.05150"
+    year: 2020
+    tags: ["transformer", "long_context"]
+    training_category: "deep_learning_foundations"
+    priority: 410
+    open_text: true
+    purpose: "Long-context transformer reference."
+
+  - title: "An Image is Worth 16x16 Words: Transformers for Image Recognition at Scale"
+    source: "arxiv"
+    arxiv_id: "2010.11929"
+    year: 2020
+    tags: ["vit", "vision_transformer"]
+    training_category: "vision_foundations"
+    priority: 420
+    open_text: true
+    purpose: "Vision Transformer reference."
+
+  - title: "GPT-3: Language Models are Few-Shot Learners"
+    source: "arxiv"
+    arxiv_id: "2005.14165"
+    year: 2020
+    tags: ["gpt", "large_language_models", "few_shot"]
+    training_category: "llm_foundations"
+    priority: 430
+    open_text: true
+    purpose: "Few-shot LLM reference."
+
+  - title: "Chinchilla: Training Compute-Optimal Large Language Models"
+    source: "arxiv"
+    arxiv_id: "2203.15556"
+    year: 2022
+    tags: ["scaling_laws", "training"]
+    training_category: "llm_foundations"
+    priority: 440
+    open_text: true
+    purpose: "Compute-optimal scaling reference."
+
+  - title: "Direct Preference Optimization: Your Language Model is Secretly a Reward Model"
+    source: "arxiv"
+    arxiv_id: "2305.18290"
+    year: 2023
+    tags: ["dpo", "rlhf", "alignment"]
+    training_category: "alignment"
+    priority: 450
+    open_text: true
+    purpose: "DPO reference for finance-DPO models in our model manifest."
+
+  - title: "Mamba: Linear-Time Sequence Modeling with Selective State Spaces"
+    source: "arxiv"
+    arxiv_id: "2312.00752"
+    year: 2023
+    tags: ["state_space", "sequence_modeling"]
+    training_category: "sequence_modeling"
+    priority: 460
+    open_text: true
+    purpose: "SSM/Mamba reference."
+
+  - title: "Chronos: Learning the Language of Time Series"
+    source: "arxiv"
+    arxiv_id: "2403.07815"
+    year: 2024
+    tags: ["time_series", "foundation_model"]
+    training_category: "time_series_foundation"
+    priority: 470
+    open_text: true
+    purpose: "Underpins amazon/chronos-2 in our model manifest."
+
+  - title: "TimesNet: Temporal 2D-Variation Modeling for General Time Series Analysis"
+    source: "arxiv"
+    arxiv_id: "2210.02186"
+    year: 2022
+    tags: ["time_series", "deep_learning"]
+    training_category: "time_series_foundation"
+    priority: 480
+    open_text: true
+    purpose: "Strong time-series modeling reference."
+
+  - title: "Informer: Beyond Efficient Transformer for Long Sequence Time-Series Forecasting"
+    source: "arxiv"
+    arxiv_id: "2012.07436"
+    year: 2020
+    tags: ["time_series", "transformer"]
+    training_category: "time_series_foundation"
+    priority: 490
+    open_text: true
+    purpose: "Long-sequence time-series transformer."
+
+  - title: "Reinforcement Learning for Optimal Market Making"
+    source: "arxiv"
+    arxiv_id: "1810.06593"
+    year: 2018
+    tags: ["reinforcement_learning", "market_making"]
+    training_category: "rl_trading"
+    priority: 500
+    open_text: true
+    purpose: "RL market making reference."
+
+  - title: "Deep Reinforcement Learning in Quantitative Algorithmic Trading: A Review"
+    source: "arxiv"
+    arxiv_id: "2106.00123"
+    year: 2021
+    tags: ["reinforcement_learning", "quant_trading", "review"]
+    training_category: "rl_trading"
+    priority: 510
+    open_text: true
+    purpose: "RL trading review."
+
+  - title: "Practical Deep Reinforcement Learning Approach for Stock Trading"
+    source: "arxiv"
+    arxiv_id: "1811.07522"
+    year: 2018
+    tags: ["reinforcement_learning", "stock_trading"]
+    training_category: "rl_trading"
+    priority: 520
+    open_text: true
+    purpose: "Practical RL trading reference."
+
+  - title: "FinBERT: A Pretrained Language Model for Financial Communications"
+    source: "arxiv"
+    arxiv_id: "2006.08097"
+    year: 2020
+    tags: ["finbert", "finance", "nlp"]
+    training_category: "finance_nlp"
+    priority: 530
+    open_text: true
+    purpose: "FinBERT foundation paper for our ProsusAI/finbert model."
+
+  - title: "FinGPT: Open-Source Financial Large Language Models"
+    source: "arxiv"
+    arxiv_id: "2306.06031"
+    year: 2023
+    tags: ["fingpt", "finance_llm"]
+    training_category: "finance_llm"
+    priority: 540
+    open_text: true
+    purpose: "FinGPT reference for finance LLM lineage."
+
+  - title: "BloombergGPT: A Large Language Model for Finance"
+    source: "arxiv"
+    arxiv_id: "2303.17564"
+    year: 2023
+    tags: ["bloomberg", "finance_llm"]
+    training_category: "finance_llm"
+    priority: 550
+    open_text: true
+    purpose: "Finance-domain LLM design reference."
+
+  - title: "FNSPID: A Comprehensive Financial News Dataset in Time Series"
+    source: "arxiv"
+    arxiv_id: "2402.06698"
+    year: 2024
+    tags: ["news", "time_series", "dataset"]
+    training_category: "finance_news"
+    priority: 560
+    open_text: true
+    purpose: "FNSPID dataset paper for our HF dataset entry."
+
+  - title: "Statistical Arbitrage in the U.S. Equities Market"
+    source: "arxiv"
+    arxiv_id: "0911.2392"
+    year: 2008
+    tags: ["statistical_arbitrage", "equity"]
+    training_category: "stat_arb"
+    priority: 570
+    open_text: true
+    purpose: "Stat-arb baseline reference."
+
+  - title: "Pairs Trading: Performance of a Relative-Value Arbitrage Rule"
+    source: "doi"
+    doi: "10.1093/rfs/hhj020"
+    year: 2006
+    tags: ["pairs_trading", "stat_arb"]
+    training_category: "stat_arb"
+    priority: 580
+    open_text: false
+
+  - title: "The Adaptive Markets Hypothesis"
+    source: "open_reference"
+    year: 2004
+    tags: ["market_efficiency"]
+    training_category: "market_theory"
+    priority: 590
+    open_text: true
+    purpose: "Behavioral and adaptive markets reference."
+
+  - title: "High-Frequency Trading and Price Discovery"
+    source: "doi"
+    doi: "10.1093/rfs/hhu032"
+    year: 2014
+    tags: ["high_frequency", "price_discovery"]
+    training_category: "market_microstructure"
+    priority: 600
+    open_text: false
+
+  - title: "An Empirical Behavioral Model of Liquidity and Volatility"
+    source: "arxiv"
+    arxiv_id: "0706.1271"
+    year: 2007
+    tags: ["liquidity", "volatility"]
+    training_category: "market_microstructure"
+    priority: 610
+    open_text: true
+    purpose: "Liquidity-volatility empirical reference."
+
+  - title: "Risk and Return in High Frequency Trading"
+    source: "arxiv"
+    arxiv_id: "1605.06956"
+    year: 2016
+    tags: ["high_frequency", "risk_return"]
+    training_category: "market_microstructure"
+    priority: 620
+    open_text: true
+    purpose: "HFT risk/return reference."
+
+  - title: "Generative Adversarial Networks"
+    source: "arxiv"
+    arxiv_id: "1406.2661"
+    year: 2014
+    tags: ["gan", "generative_models"]
+    training_category: "generative_models"
+    priority: 700
+    open_text: true
+    purpose: "GAN foundation reference."
+
+  - title: "Denoising Diffusion Probabilistic Models"
+    source: "arxiv"
+    arxiv_id: "2006.11239"
+    year: 2020
+    tags: ["diffusion", "generative_models"]
+    training_category: "generative_models"
+    priority: 710
+    open_text: true
+    purpose: "DDPM foundation reference."
+
+  - title: "Variational Inference with Normalizing Flows"
+    source: "arxiv"
+    arxiv_id: "1505.05770"
+    year: 2015
+    tags: ["normalizing_flows", "variational_inference"]
+    training_category: "generative_models"
+    priority: 720
+    open_text: true
+    purpose: "Normalizing flows reference."
+
+  - title: "Conditional Time-Series Generation with GANs"
+    source: "arxiv"
+    arxiv_id: "1706.02633"
+    year: 2017
+    tags: ["gan", "time_series"]
+    training_category: "generative_time_series"
+    priority: 730
+    open_text: true
+    purpose: "Time-series GAN reference."
+
+  - title: "Tuning-Free Generation of Realistic Synthetic Tabular Data"
+    source: "arxiv"
+    arxiv_id: "2407.07116"
+    year: 2024
+    tags: ["tabular", "synthetic_data"]
+    training_category: "tabular_synthesis"
+    priority: 740
+    open_text: true
+    purpose: "Synthetic tabular generation reference."
+
+  - title: "XGBoost: A Scalable Tree Boosting System"
+    source: "arxiv"
+    arxiv_id: "1603.02754"
+    year: 2016
+    tags: ["gbm", "tabular"]
+    training_category: "tabular_baselines"
+    priority: 800
+    open_text: true
+    purpose: "XGBoost reference for our tabular finance baseline."
+
+  - title: "LightGBM: A Highly Efficient Gradient Boosting Decision Tree"
+    source: "open_reference"
+    year: 2017
+    tags: ["gbm", "tabular"]
+    training_category: "tabular_baselines"
+    priority: 810
+    open_text: true
+    purpose: "LightGBM reference for our tabular finance baseline."
+
+  - title: "CatBoost: Unbiased Boosting with Categorical Features"
+    source: "arxiv"
+    arxiv_id: "1706.09516"
+    year: 2017
+    tags: ["gbm", "tabular", "categorical"]
+    training_category: "tabular_baselines"
+    priority: 820
+    open_text: true
+    purpose: "CatBoost reference for our tabular finance baseline."
