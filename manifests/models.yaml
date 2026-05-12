@@ -130,3 +130,97 @@ models:
       - "LICENSE*"
     purpose: "12B quantized stock-themed LLM candidate."
 
+  - id: Qwen/Qwen2.5-0.5B-Instruct
+    group: small_instruct
+    priority: 500
+    expected_params: 500000000
+    license_hint: apache-2.0
+    topics: [instruction, code, reasoning]
+    purpose: "Tiny instruction LLM used as default Q&A generator for paper instructions."
+
+  - id: roneneldan/TinyStories-33M
+    group: tiny_lm_fallback
+    priority: 510
+    expected_params: 33000000
+    license_hint: cdla-sharing-1.0
+    topics: [general_nlp]
+    purpose: "Fallback model for paper Q&A when Qwen is unavailable."
+
+  - id: sentence-transformers/all-MiniLM-L6-v2
+    group: retrieval_embeddings
+    priority: 520
+    expected_params: 22700000
+    license_hint: apache-2.0
+    topics: [general_nlp]
+    purpose: "Compact sentence embedder for retrieval baselines."
+
+  - id: ProsusAI/finbert
+    group: sentiment_features
+    priority: 530
+    expected_params: 110000000
+    license_hint: apache-2.0
+    topics: [sentiment, news]
+    purpose: "FinBERT financial sentiment classifier."
+
+  - id: distilbert/distilbert-base-uncased
+    group: general_nlp_baseline
+    priority: 540
+    expected_params: 67000000
+    license_hint: apache-2.0
+    topics: [general_nlp]
+    purpose: "Small distilled BERT for NLP plumbing."
+
+  - id: Qwen/Qwen2.5-Coder-1.5B
+    group: code_small
+    priority: 550
+    expected_params: 1500000000
+    license_hint: apache-2.0
+    topics: [code]
+    purpose: "Compact code LLM for local experiments."
+
+  - id: mlx-community/Qwen2.5-7B-Instruct-4bit
+    group: apple_silicon_llm
+    priority: 600
+    expected_params: 7000000000
+    license_hint: apache-2.0
+    topics: [instruction]
+    purpose: "MLX-optimized 7B instruct for Apple Silicon."
+
+  - id: bartowski/Qwen2.5-14B-Instruct-GGUF
+    group: large_llm_gguf
+    priority: 700
+    expected_params: 14000000000
+    license_hint: apache-2.0
+    topics: [instruction, reasoning]
+    allow_patterns:
+      - "*Q4_K_M*.gguf"
+      - "*q4_k_m*.gguf"
+      - "README*"
+      - "LICENSE*"
+    purpose: "14B Qwen2.5 instruct GGUF Q4_K_M; ~9 GB on disk."
+
+  - id: bartowski/Mistral-Small-Instruct-2409-GGUF
+    group: large_llm_gguf
+    priority: 710
+    expected_params: 22000000000
+    license_hint: mrl
+    topics: [instruction]
+    allow_patterns:
+      - "*Q4_K_M*.gguf"
+      - "*q4_k_m*.gguf"
+      - "README*"
+      - "LICENSE*"
+    purpose: "22B Mistral Small Instruct GGUF Q4_K_M; ~13 GB on disk."
+
+  - id: bartowski/Yi-1.5-34B-Chat-GGUF
+    group: very_large_llm_gguf
+    priority: 800
+    expected_params: 34000000000
+    license_hint: apache-2.0
+    topics: [instruction, reasoning]
+    allow_patterns:
+      - "*Q4_K_M*.gguf"
+      - "*q4_k_m*.gguf"
+      - "README*"
+      - "LICENSE*"
+    purpose: "34B Yi 1.5 chat GGUF Q4_K_M; ~20 GB on disk. Pushes the M4 24 GB envelope at inference."
