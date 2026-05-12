@@ -11,7 +11,6 @@ from rich.table import Table
 
 from quant_research_stack.artifacts import read_yaml, safe_repo_id, write_json
 
-
 console = Console()
 
 

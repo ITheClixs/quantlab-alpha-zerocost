@@ -3,6 +3,20 @@ artifact_budget:
   reserve_gb_for_processed_outputs: 0
   default_sort: size
   hard_ceiling_gb: 165
+  counted_paths:
+    - data/raw/huggingface
+    - data/raw/kaggle
+    - data/raw/papers
+    - data/processed
+    - models/huggingface
+
+llm_runtime:
+  primary_model_id: bartowski/Mistral-Small-Instruct-2409-GGUF
+  primary_local_dir: models/huggingface/bartowski__Mistral-Small-Instruct-2409-GGUF
+  fallback_model_id: TheBloke/finance-LLM-13B-GGUF
+  fallback_local_dir: models/huggingface/TheBloke__finance-LLM-13B-GGUF
+  preferred_quant: Q4_K_M
+  context_tokens: 4096
 
 bucket_budgets:
   hf_datasets: 50
