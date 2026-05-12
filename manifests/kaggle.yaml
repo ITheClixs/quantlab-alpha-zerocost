@@ -1,0 +1,110 @@
+schema_version: 1
+description: >
+  Kaggle competitions and datasets for the QuantLab 150 GB corpus. The downloader
+  estimates sizes via kaggle CLI metadata where possible and respects the kaggle
+  bucket budget from configs/stack.yaml.
+
+defaults:
+  resource_type: competition
+  enabled: true
+  expected_max_gb: 12.0
+
+items:
+  - id: jpx-tokyo-stock-exchange-prediction
+    resource_type: competition
+    group: equity_jpx
+    priority: 10
+    topics: [equity, time_series]
+    license_hint: kaggle_competition
+    expected_max_gb: 2.0
+    purpose: "Cross-sectional equity ranking benchmark used as first milestone in CLAUDE.md."
+
+  - id: stock-market-signal-predict-next-day-returns
+    resource_type: competition
+    group: equity_signal
+    priority: 20
+    topics: [equity]
+    license_hint: kaggle_competition
+    expected_max_gb: 1.0
+    purpose: "Compact next-day-return supervised problem for baseline plumbing."
+
+  - id: g-research-crypto-forecasting
+    resource_type: competition
+    group: crypto_forecasting
+    priority: 30
+    topics: [crypto, time_series]
+    license_hint: kaggle_competition
+    expected_max_gb: 6.0
+    purpose: "Minute-bar crypto forecasting with cross-asset structure."
+
+  - id: optiver-trading-at-the-close
+    resource_type: competition
+    group: microstructure_close
+    priority: 40
+    topics: [microstructure, equity]
+    license_hint: kaggle_competition
+    expected_max_gb: 4.0
+    purpose: "Closing auction microstructure features."
+
+  - id: optiver-realized-volatility-prediction
+    resource_type: competition
+    group: realized_volatility
+    priority: 50
+    topics: [microstructure, options]
+    license_hint: kaggle_competition
+    expected_max_gb: 5.0
+    purpose: "Realized volatility from book snapshots."
+
+  - id: jane-street-market-prediction
+    resource_type: competition
+    group: jane_street_classic
+    priority: 60
+    topics: [equity, microstructure]
+    license_hint: kaggle_competition
+    expected_max_gb: 6.0
+    purpose: "Utility-based decision modeling benchmark."
+
+  - id: jane-street-real-time-market-data-forecasting
+    resource_type: competition
+    group: jane_street_realtime
+    priority: 70
+    topics: [equity, microstructure, time_series]
+    license_hint: kaggle_competition
+    expected_max_gb: 10.0
+    purpose: "Real-time market data forecasting with explicit cost modeling."
+
+  - id: the-winton-stock-market-challenge
+    resource_type: competition
+    group: equity_intraday_features
+    priority: 80
+    topics: [equity, time_series]
+    license_hint: kaggle_competition
+    expected_max_gb: 1.0
+    purpose: "Classic intraday return prediction benchmark."
+
+  - id: jakewright/9000-tickers-of-stock-market-data-full-history
+    resource_type: dataset
+    group: equity_ohlcv_us
+    priority: 200
+    topics: [equity]
+    license_hint: cc0
+    expected_max_gb: 4.0
+    purpose: "Wide US equity OHLCV history for cross-sectional features."
+
+  - id: asadullahcreative/us-stock-market-historical-ohlcv-dataset
+    resource_type: dataset
+    group: equity_ohlcv_us_alt
+    priority: 210
+    topics: [equity]
+    license_hint: unknown
+    expected_max_gb: 2.0
+    purpose: "Alternate US OHLCV dataset for cross-validation."
+
+  - id: dgawlik/nyse
+    resource_type: dataset
+    group: equity_nyse_fundamentals
+    priority: 220
+    topics: [equity]
+    license_hint: cc0
+    expected_max_gb: 0.5
+    purpose: "NYSE fundamentals + prices for fundamental factors."
