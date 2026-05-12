@@ -47,7 +47,11 @@ def canonical_market_frame(path: Path, dataset_id: str, horizons: list[int], vol
     frame = scan_file(path)
     if frame is None:
         return None
-    columns = frame.collect_schema().names()
+    try:
+        columns = frame.collect_schema().names()
+    except Exception as exc:
+        console.print(f"[yellow]Skipping unreadable tabular file[/yellow] {path}: {exc}")
+        return None
     mapping = lower_map(columns)
     time_col = first_present(mapping, TIME_COLUMNS)
     open_col = first_present(mapping, OPEN_COLUMNS)
@@ -110,25 +114,45 @@ def canonical_market_frame(path: Path, dataset_id: str, horizons: list[int], vol
     return out
 
 
-def process_dataset(dataset_dir: Path, output_root: Path, config: dict) -> dict:
+def process_dataset(
+    dataset_dir: Path,
+    output_root: Path,
+    config: dict,
+    max_files: int | None = None,
+    max_source_file_gb: float | None = None,
+    skip_existing: bool = False,
+) -> dict:
     dataset_id = dataset_dir.name
     output_dir = output_root / dataset_id
     output_dir.mkdir(parents=True, exist_ok=True)
     horizons = [int(x) for x in config["market_preparation"]["horizons"]]
     vol_windows = [int(x) for x in config["market_preparation"]["volatility_windows"]]
     files = sorted([*dataset_dir.rglob("*.parquet"), *dataset_dir.rglob("*.csv")])
+    if max_source_file_gb is not None:
+        max_bytes = int(max_source_file_gb * 1024**3)
+        files = [path for path in files if path.stat().st_size <= max_bytes]
+    if max_files is not None:
+        files = files[:max_files]
     produced = []
     skipped = []
     for file_path in files:
+        out_path = output_dir / f"{safe_repo_id(file_path.relative_to(dataset_dir).as_posix())}.features.parquet"
+        if skip_existing and out_path.exists():
+            produced.append(str(out_path))
+            continue
         frame = canonical_market_frame(file_path, dataset_id, horizons, vol_windows)
         if frame is None:
             skipped.append(str(file_path))
             continue
-        out_path = output_dir / f"{safe_repo_id(file_path.relative_to(dataset_dir).as_posix())}.features.parquet"
         try:
-            frame.sink_parquet(out_path)
-        except Exception:
-            frame.collect(streaming=True).write_parquet(out_path)
+            try:
+                frame.sink_parquet(out_path)
+            except Exception:
+                frame.collect(engine="streaming").write_parquet(out_path)
+        except Exception as exc:
+            console.print(f"[yellow]Skipping unprocessable market file[/yellow] {file_path}: {exc}")
+            skipped.append(str(file_path))
+            continue
         produced.append(str(out_path))
     return {
         "dataset_dir": str(dataset_dir),
@@ -144,6 +168,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--input-root", default=None)
     parser.add_argument("--output-root", default=None)
     parser.add_argument("--report", default="reports/market_preparation.json")
+    parser.add_argument("--dataset", action="append", default=[], help="Process only these raw dataset directory names.")
+    parser.add_argument("--max-files-per-dataset", type=int, default=None)
+    parser.add_argument("--max-source-file-gb", type=float, default=None)
+    parser.add_argument("--skip-existing", action="store_true")
     return parser.parse_args()
 
 
@@ -157,8 +185,18 @@ def main() -> int:
     if not input_root.exists():
         console.print(f"No input root exists: {input_root}")
         return 0
+    requested = set(args.dataset)
     for dataset_dir in sorted(path for path in input_root.iterdir() if path.is_dir()):
-        result = process_dataset(dataset_dir, output_root, config)
+        if requested and dataset_dir.name not in requested:
+            continue
+        result = process_dataset(
+            dataset_dir,
+            output_root,
+            config,
+            max_files=args.max_files_per_dataset,
+            max_source_file_gb=args.max_source_file_gb,
+            skip_existing=args.skip_existing,
+        )
         results.append(result)
         console.print(f"{dataset_dir.name}: produced {len(result['produced_files'])} feature files")
     write_json(args.report, {"datasets": results})
@@ -168,4 +206,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     sys.exit(main())
-
