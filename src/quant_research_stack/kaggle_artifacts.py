@@ -1,17 +1,13 @@
 from __future__ import annotations
 
-import re
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
 
-from quant_research_stack.artifacts import read_yaml
+from quant_research_stack.artifacts import read_yaml, safe_repo_id
 
 VALID_RESOURCE_TYPES = frozenset({"competition", "dataset"})
 
-
-def safe_kaggle_dir_name(item_id: str) -> str:
-    return re.sub(r"[^A-Za-z0-9_.-]+", "__", item_id)
+safe_kaggle_dir_name = safe_repo_id
 
 
 @dataclass(frozen=True)
@@ -27,18 +23,12 @@ class KaggleItem:
     enabled: bool
 
 
-def _merge(defaults: dict[str, Any], raw: dict[str, Any]) -> dict[str, Any]:
-    merged = dict(defaults)
-    merged.update(raw)
-    return merged
-
-
 def load_kaggle_items(manifest_path: str | Path) -> list[KaggleItem]:
     manifest = read_yaml(manifest_path)
     defaults = manifest.get("defaults", {}) or {}
     items: list[KaggleItem] = []
     for raw in manifest.get("items", []) or []:
-        merged = _merge(defaults, raw)
+        merged = {**defaults, **raw}
         resource_type = merged.get("resource_type", "competition")
         if resource_type not in VALID_RESOURCE_TYPES:
             raise ValueError(
