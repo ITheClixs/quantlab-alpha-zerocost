@@ -1,0 +1,161 @@
+schema_version: 1
+description: >
+  Candidate datasets for a quantitative finance model stack. The downloader estimates
+  file sizes, sorts by size, and downloads enabled datasets while respecting the global
+  budget in configs/stack.yaml.
+
+defaults:
+  repo_type: dataset
+  enabled: true
+  allow_patterns:
+    - "*.parquet"
+    - "*.csv"
+    - "*.json"
+    - "*.jsonl"
+    - "*.txt"
+    - "*.md"
+    - "README*"
+  ignore_patterns:
+    - ".git*"
+    - "*.png"
+    - "*.jpg"
+    - "*.jpeg"
+    - "*.gif"
+    - "*.mp4"
+    - "*.zip"
+    - "*.tar"
+    - "*.tar.gz"
+
+datasets:
+  - id: Neil0930/quantitative_finance_dataset
+    group: quant_instruction
+    priority: 10
+    license_hint: mit
+    purpose: "Tiny quantitative-finance QA/instruction seed corpus."
+
+  - id: VedantPadwal/quantitative-finance-reasoning
+    group: quant_instruction
+    priority: 20
+    license_hint: unknown
+    purpose: "Formula-heavy quantitative-finance reasoning prompts."
+
+  - id: lumalik/Quant-Trading-Instruct
+    group: quant_instruction
+    priority: 30
+    license_hint: unknown
+    purpose: "Instruction examples around quantitative trading concepts."
+
+  - id: vaquum/binance_btcusdt_1m_klines
+    group: crypto_ohlcv
+    priority: 100
+    license_hint: unknown
+    purpose: "BTCUSDT one-minute OHLCV, useful for baseline forecasting and labels."
+
+  - id: h34v7/BTCUSDT_Binance_1min_2017-2025
+    group: crypto_ohlcv
+    priority: 110
+    license_hint: mit
+    purpose: "Long BTCUSDT one-minute OHLCV history for walk-forward validation."
+
+  - id: 123olp/binance-futures-ohlcv-2018-2026
+    group: crypto_futures_ohlcv
+    priority: 120
+    license_hint: mit
+    purpose: "Binance futures OHLCV history for derivatives forecasting."
+
+  - id: predict-quant/binance-future-orderbook
+    group: crypto_orderbook
+    priority: 200
+    license_hint: apache-2.0
+    purpose: "Binance futures order book data for order-flow imbalance and microstructure signals."
+
+  - id: predict-quant/binance-spot-orderbook
+    group: crypto_orderbook
+    priority: 210
+    license_hint: unknown
+    purpose: "Binance spot order book data for spot/futures microstructure comparison."
+
+  - id: mad0g4/l2_orderbook_binance
+    group: crypto_orderbook
+    priority: 220
+    license_hint: unknown
+    purpose: "L2 Binance order-book dataset candidate."
+
+  - id: AdamAtractor/24_crypto_orderbook_30lvl
+    group: crypto_orderbook
+    priority: 230
+    license_hint: cc-by-4.0
+    purpose: "30-level crypto order-book data across instruments."
+
+  - id: orion-research/binance-btcusdt-spot-trades
+    group: crypto_trades
+    priority: 300
+    license_hint: unknown
+    purpose: "BTCUSDT trade flow for signed-volume and trade-intensity features."
+
+  - id: xxparthparekhxx/indian-stock-market-minute-data
+    group: equity_intraday
+    priority: 400
+    license_hint: mit
+    purpose: "Large equity minute/daily dataset for non-crypto market generalization."
+
+  - id: voigtstefan/sp500
+    group: sp500_market
+    priority: 500
+    license_hint: mit
+    purpose: "SPY ETF high-frequency data for S&P 500 proxy price prediction."
+
+  - id: jwigginton/timeseries-daily-sp500
+    group: sp500_market
+    priority: 510
+    license_hint: unknown
+    purpose: "Daily S&P 500 time-series baseline data."
+
+  - id: mospira/sp500-daily-candles-2025
+    group: sp500_market
+    priority: 520
+    license_hint: mit
+    purpose: "Recent S&P 500 daily candle data for fresh holdout tests."
+
+  - id: gauss314/options-IV-SP500
+    group: sp500_options
+    priority: 530
+    license_hint: apache-2.0
+    purpose: "Options implied-volatility features for volatility and risk modeling."
+
+  - id: Q-bert/NASDAQ-Daily-Close-Random-100
+    group: nasdaq_market
+    priority: 600
+    license_hint: unknown
+    purpose: "NASDAQ daily close sample for equity forecasting smoke tests."
+
+  - id: benstaf/nasdaq_2013_2023
+    group: nasdaq_market
+    priority: 610
+    license_hint: unknown
+    purpose: "NASDAQ 2013-2023 price/news candidate dataset."
+
+  - id: zexianli/nasdaq_shifted
+    group: nasdaq_market
+    priority: 620
+    license_hint: unknown
+    purpose: "NASDAQ shifted tabular dataset candidate for supervised labels."
+
+  - id: sabareesh88/FNSPID_nasdaq
+    group: nasdaq_news
+    priority: 700
+    license_hint: unknown
+    purpose: "NASDAQ financial news corpus for LLM research and sentiment features."
+
+  - id: glopardo/sp500-earnings-transcripts
+    group: sp500_text
+    priority: 800
+    license_hint: unknown
+    purpose: "S&P 500 earnings calls for retrieval, sentiment, and LLM mentoring context."
+
+  - id: jlohding/sp500-edgar-10k
+    group: sp500_text
+    priority: 810
+    license_hint: mit
+    purpose: "S&P 500 10-K filings for fundamental/risk research corpus."
+

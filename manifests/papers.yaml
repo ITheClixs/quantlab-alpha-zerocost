@@ -1,0 +1,229 @@
+schema_version: 1
+description: >
+  Research papers to collect into a local research corpus. This file starts with
+  high-value known anchors and can be expanded from Paper Search MCP results.
+
+papers:
+  - title: "The Price Impact of Order Book Events"
+    source: "arxiv"
+    arxiv_id: "1011.6402"
+    doi: "10.1093/jjfinec/nbt003"
+    year: 2010
+    tags: ["order_flow_imbalance", "price_impact", "market_microstructure"]
+    training_category: "microstructure_core"
+    priority: 10
+    open_text: true
+    purpose: "Defines order-flow imbalance features linked to short-horizon price impact."
+
+  - title: "Cross-Impact of Order Flow Imbalance in Equity Markets"
+    source: "arxiv"
+    arxiv_id: "2112.13213"
+    year: 2021
+    tags: ["cross_impact", "order_flow_imbalance", "equities", "multi_asset"]
+    training_category: "orderflow_features"
+    priority: 20
+    open_text: true
+    purpose: "Anchor for NASDAQ/S&P multi-asset lagged OFI and cross-impact features."
+
+  - title: "Price Dynamics in a Markovian Limit Order Market"
+    source: "arxiv"
+    arxiv_id: "1104.4596"
+    doi: "10.1137/110856605"
+    year: 2011
+    tags: ["limit_order_book", "queue_dynamics", "stochastic_modeling"]
+    training_category: "microstructure_core"
+    priority: 30
+    open_text: true
+    purpose: "Queue-based theory for price moves, book depletion, and volatility."
+
+  - title: "Optimal Order Placement in Limit Order Markets"
+    source: "arxiv"
+    arxiv_id: "1210.1625"
+    year: 2012
+    tags: ["execution", "limit_orders", "market_orders", "slippage"]
+    training_category: "execution_backtest"
+    priority: 40
+    open_text: true
+    purpose: "Execution realism for order placement and backtest cost modeling."
+
+  - title: "Advances in Financial Machine Learning"
+    source: "book_reference"
+    year: 2018
+    tags: ["triple_barrier", "purged_cv", "meta_labeling", "backtesting"]
+    training_category: "validation_and_labeling"
+    priority: 50
+    open_text: false
+    notes: "Book reference; do not download copyrighted text automatically."
+
+  - title: "The Volume Clock: Insights into the High Frequency Paradigm"
+    source: "ssrn"
+    year: 2012
+    tags: ["volume_clock", "market_microstructure", "event_bars"]
+    training_category: "market_microstructure"
+    priority: 60
+    open_text: false
+    notes: "Use metadata/abstract unless an open copy is available."
+
+  - title: "DeepLOB: Deep Convolutional Neural Networks for Limit Order Books"
+    source: "arxiv"
+    arxiv_id: "1808.03668"
+    doi: "10.1109/TSP.2019.2907260"
+    year: 2018
+    tags: ["limit_order_book", "deep_learning", "order_flow"]
+    training_category: "lob_prediction"
+    priority: 70
+    open_text: true
+    purpose: "CNN/LSTM baseline architecture for LOB tensors and mid-price labels."
+
+  - title: "BDLOB: Bayesian Deep Convolutional Neural Networks for Limit Order Books"
+    source: "arxiv"
+    arxiv_id: "1811.10041"
+    year: 2018
+    tags: ["limit_order_book", "bayesian_deep_learning", "uncertainty"]
+    training_category: "lob_uncertainty"
+    priority: 80
+    open_text: true
+    purpose: "Uncertainty-aware LOB prediction for filtering and position sizing."
+
+  - title: "Universal Features of Price Formation in Financial Markets: Perspectives from Deep Learning"
+    source: "arxiv"
+    arxiv_id: "1909.10140"
+    year: 2019
+    tags: ["limit_order_book", "deep_learning", "price_formation"]
+    training_category: "lob_prediction"
+    priority: 90
+    open_text: true
+
+  - title: "The Micro-Price: A High-Frequency Estimator of Future Prices"
+    source: "ssrn"
+    doi: "10.2139/ssrn.2970694"
+    year: 2017
+    tags: ["microprice", "orderbook", "market_microstructure"]
+    training_category: "feature_engineering"
+    priority: 100
+    open_text: false
+
+  - title: "Deep Order Flow Imbalance: Extracting Alpha at Multiple Horizons from the Limit Order Book"
+    source: "doi"
+    doi: "10.1111/mafi.12413"
+    year: 2023
+    tags: ["deep_order_flow_imbalance", "nasdaq", "alpha", "multi_horizon"]
+    training_category: "orderflow_features"
+    priority: 110
+    open_text: false
+    purpose: "Key evidence that stationary order-flow features can beat raw LOB states."
+
+  - title: "Multi-Level Order-Flow Imbalance in a Limit Order Book"
+    source: "doi"
+    doi: "10.2139/ssrn.3479741"
+    year: 2019
+    tags: ["multi_level_ofi", "limit_order_book", "feature_engineering"]
+    training_category: "orderflow_features"
+    priority: 120
+    open_text: false
+
+  - title: "Deep Learning for Limit Order Books"
+    source: "doi"
+    doi: "10.1080/14697688.2018.1546053"
+    year: 2019
+    tags: ["limit_order_book", "deep_learning", "spatial_neural_network"]
+    training_category: "lob_deep_learning"
+    priority: 130
+    open_text: false
+
+  - title: "Stock Price Prediction Using Triple Barrier Labeling and Raw OHLCV Data: Evidence from Korean Markets"
+    source: "arxiv"
+    arxiv_id: "2504.02249"
+    year: 2025
+    tags: ["triple_barrier", "ohlcv", "supervised_labels"]
+    training_category: "labeling_experiments"
+    priority: 140
+    open_text: true
+    purpose: "Practical triple-barrier labeling example for raw OHLCV features."
+
+  - title: "Algorithmic Crypto Trading Using Information-Driven Bars, Triple Barrier Labeling and Deep Learning"
+    source: "doi"
+    doi: "10.1186/s40854-025-00866-w"
+    year: 2025
+    tags: ["information_driven_bars", "triple_barrier", "crypto", "deep_learning"]
+    training_category: "labeling_experiments"
+    priority: 150
+    open_text: true
+    purpose: "Open paper connecting event bars, triple-barrier labels, and crypto trading."
+
+  - title: "The Probability of Backtest Overfitting"
+    source: "open_reference"
+    year: 2017
+    tags: ["backtest_overfitting", "selection_bias", "validation"]
+    training_category: "validation_backtest"
+    priority: 160
+    open_text: true
+    purpose: "Core warning against strategy mining and false discoveries."
+
+  - title: "A Backtesting Protocol in the Era of Machine Learning"
+    source: "doi"
+    doi: "10.3905/jfds.2019.1.064"
+    year: 2019
+    tags: ["backtesting", "machine_learning", "financial_data_science"]
+    training_category: "validation_backtest"
+    priority: 170
+    open_text: false
+
+  - title: "Predicting Stock Movement Direction with Machine Learning: An Extensive Study on S&P 500 Stocks"
+    source: "doi"
+    doi: "10.1109/BigData.2017.8258518"
+    year: 2017
+    tags: ["sp500", "stock_direction", "machine_learning"]
+    training_category: "equity_prediction_baseline"
+    priority: 180
+    open_text: false
+
+  - title: "Simulating Financial Market via Large Language Model Based Agents"
+    source: "arxiv"
+    arxiv_id: "2406.19966"
+    doi: "10.48550/arXiv.2406.19966"
+    year: 2024
+    tags: ["llm_agents", "market_simulation", "agent_based_modeling"]
+    training_category: "llm_agent_research"
+    priority: 190
+    open_text: true
+    purpose: "Useful for terminal agent design, simulation, and market reaction experiments."
+
+  - title: "StockAgent: LLM-Based Stock Trading in Simulated Real-World Environments"
+    source: "arxiv"
+    arxiv_id: "2407.18957"
+    doi: "10.48550/arXiv.2407.18957"
+    year: 2024
+    tags: ["llm_agents", "stock_trading", "simulation", "leakage_control"]
+    training_category: "llm_agent_research"
+    priority: 200
+    open_text: true
+    purpose: "LLM trading-agent architecture with explicit leakage considerations."
+
+  - title: "Large Language Model Agents for Investment Management: Foundations, Benchmarks, and Research Frontiers"
+    source: "doi"
+    doi: "10.1145/3768292.3770387"
+    year: 2025
+    tags: ["llm_agents", "investment_management", "benchmarks", "survey"]
+    training_category: "llm_agent_survey"
+    priority: 210
+    open_text: false
+
+  - title: "Regime-Aware Financial Volatility Forecasting via In-Context Learning"
+    source: "arxiv"
+    arxiv_id: "2603.10299"
+    year: 2026
+    tags: ["volatility_forecasting", "regime_detection", "in_context_learning"]
+    training_category: "volatility_forecasting"
+    priority: 220
+    open_text: true
+    purpose: "Volatility/regime target engineering and LLM-style forecasting context."
+
+  - title: "The Econometrics of Financial Markets"
+    source: "book_reference"
+    year: 1997
+    tags: ["econometrics", "returns", "volatility"]
+    training_category: "background"
+    priority: 999
+    open_text: false
+    notes: "Book reference; do not download copyrighted text automatically."

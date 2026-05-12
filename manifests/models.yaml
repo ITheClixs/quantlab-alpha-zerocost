@@ -1,0 +1,132 @@
+schema_version: 1
+description: >
+  Candidate local models. Time-series models are preferred for prediction. Finance LLMs
+  and GGUF models are for explanation, retrieval, hypothesis generation, and terminal
+  assistant behavior.
+
+defaults:
+  repo_type: model
+  enabled: true
+  allow_patterns:
+    - "*.safetensors"
+    - "*.json"
+    - "*.txt"
+    - "*.model"
+    - "*.md"
+    - "README*"
+    - "LICENSE*"
+  ignore_patterns:
+    - ".git*"
+    - "*.bin"
+    - "*.h5"
+    - "*.onnx"
+
+models:
+  - id: autogluon/chronos-bolt-small
+    group: time_series_forecasting
+    priority: 10
+    expected_params: 47718016
+    license_hint: apache-2.0
+    purpose: "Fast lightweight time-series forecasting baseline."
+
+  - id: amazon/chronos-2
+    group: time_series_forecasting
+    priority: 20
+    expected_params: 119477664
+    license_hint: apache-2.0
+    purpose: "Primary small time-series foundation model."
+
+  - id: ibm-granite/granite-timeseries-ttm-r2
+    group: time_series_forecasting
+    priority: 30
+    license_hint: apache-2.0
+    purpose: "Tiny Time Mixer model family for short-horizon forecasting."
+
+  - id: Maple728/TimeMoE-200M
+    group: time_series_forecasting
+    priority: 40
+    expected_params: 200000000
+    license_hint: apache-2.0
+    purpose: "Time-series MoE baseline for broader forecasting comparison."
+
+  - id: NeoQuasar/Kronos-base
+    group: finance_time_series
+    priority: 50
+    license_hint: mit
+    purpose: "Finance/candlestick/K-line model candidate."
+
+  - id: FinLang/finance-embeddings-investopedia
+    group: retrieval_embeddings
+    priority: 100
+    expected_params: 109482240
+    license_hint: cc-by-nc-4.0
+    purpose: "Finance-domain embeddings for RAG over papers and filings."
+
+  - id: hasnain43/bert-stock-sentiment-v1
+    group: sentiment_features
+    priority: 110
+    expected_params: 109484547
+    license_hint: mit
+    purpose: "Stock-news sentiment feature extractor."
+
+  - id: Tail-LS/Qwen2.5-3B-dpo-finance
+    group: finance_llm
+    priority: 200
+    expected_params: 3085938688
+    license_hint: other
+    purpose: "Small local finance LLM for explanation and reasoning."
+
+  - id: QuantFactory/Llama-3-8B-Instruct-Finance-RAG-GGUF
+    group: finance_llm_gguf
+    priority: 300
+    license_hint: llama3
+    allow_patterns:
+      - "*Q4_K_M*.gguf"
+      - "*q4_k_m*.gguf"
+      - "*Q5_K_M*.gguf"
+      - "*q5_k_m*.gguf"
+      - "README*"
+      - "LICENSE*"
+    purpose: "8B finance RAG GGUF for local llama.cpp explanation."
+
+  - id: TheBloke/finance-LLM-13B-GGUF
+    group: finance_llm_gguf
+    priority: 400
+    license_hint: other
+    allow_patterns:
+      - "*Q4_K_M*.gguf"
+      - "*q4_k_m*.gguf"
+      - "*Q5_K_M*.gguf"
+      - "*q5_k_m*.gguf"
+      - "README*"
+      - "LICENSE*"
+    purpose: "13B quantized finance LLM candidate; slower but closer to desired size."
+
+  - id: mradermacher/Irix-12B-Model_Stock-i1-GGUF
+    group: stock_llm_gguf
+    priority: 410
+    license_hint: unknown
+    allow_patterns:
+      - "*Q4_K_M*.gguf"
+      - "*q4_k_m*.gguf"
+      - "*Q5_K_M*.gguf"
+      - "*q5_k_m*.gguf"
+      - "*IQ4*.gguf"
+      - "README*"
+      - "LICENSE*"
+    purpose: "12B quantized stock-themed LLM candidate."
+
+  - id: mradermacher/Famino-12B-Model_Stock-i1-GGUF
+    group: stock_llm_gguf
+    priority: 420
+    license_hint: apache-2.0
+    allow_patterns:
+      - "*Q4_K_M*.gguf"
+      - "*q4_k_m*.gguf"
+      - "*Q5_K_M*.gguf"
+      - "*q5_k_m*.gguf"
+      - "*IQ4*.gguf"
+      - "README*"
+      - "LICENSE*"
+    purpose: "12B quantized stock-themed LLM candidate."
+

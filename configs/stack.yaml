@@ -1,0 +1,33 @@
+artifact_budget:
+  max_total_gb: 100
+  reserve_gb_for_processed_outputs: 8
+  default_sort: size
+
+paths:
+  raw_hf_root: data/raw/huggingface
+  raw_paper_root: data/raw/papers
+  processed_market_root: data/processed/market
+  processed_research_root: data/processed/research
+  model_root: models/huggingface
+  reports_root: reports
+
+market_preparation:
+  horizons:
+    - 1
+    - 5
+    - 15
+    - 60
+  volatility_windows:
+    - 5
+    - 20
+    - 60
+  triple_barrier:
+    profit_take_return: 0.002
+    stop_loss_return: -0.002
+    max_horizon: 60
+
+research_corpus:
+  chunk_words: 420
+  chunk_overlap_words: 80
+  min_chunk_words: 80
+

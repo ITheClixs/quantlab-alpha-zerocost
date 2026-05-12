@@ -1,0 +1,27 @@
+[project]
+name = "quant-research-stack"
+version = "0.1.0"
+description = "Local quantitative finance dataset, model, and paper-corpus workspace."
+requires-python = ">=3.11"
+dependencies = [
+    "datasets>=3.0.0",
+    "huggingface-hub>=0.30.0",
+    "numpy>=1.26.0",
+    "pandas>=2.2.0",
+    "polars>=1.6.0",
+    "pyarrow>=16.0.0",
+    "pypdf>=4.3.0",
+    "pyyaml>=6.0.1",
+    "requests>=2.32.0",
+    "rich>=13.7.0",
+    "scikit-learn>=1.4.0",
+    "tqdm>=4.66.0",
+]
+
+[tool.uv]
+package = true
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+

@@ -1,0 +1,17 @@
+.venv/
+__pycache__/
+*.py[cod]
+.DS_Store
+
+# Heavy artifacts are reproducible from manifests.
+data/raw/
+data/processed/
+models/huggingface/
+logs/
+
+# Keep reports mostly versionable, but exclude large generated inventories.
+reports/*.json
+reports/*.jsonl
+reports/*.csv
+reports/*.parquet
+
