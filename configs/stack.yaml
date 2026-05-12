@@ -15,6 +15,7 @@ paths:
   raw_paper_root: data/raw/papers
   raw_kaggle_root: data/raw/kaggle
   processed_market_root: data/processed/market
+  processed_orderbook_root: data/processed/orderbook
   processed_research_root: data/processed/research
   model_root: models/huggingface
   reports_root: reports
