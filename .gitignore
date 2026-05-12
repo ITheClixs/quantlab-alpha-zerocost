@@ -7,6 +7,8 @@ __pycache__/
 data/raw/
 data/processed/
 models/huggingface/
+models/trained/
+experiments/
 logs/
 
 # Keep reports mostly versionable, but exclude large generated inventories.
@@ -14,4 +16,3 @@ reports/*.json
 reports/*.jsonl
 reports/*.csv
 reports/*.parquet
-

@@ -58,3 +58,11 @@ research_corpus:
   instruction_max_new_tokens: 256
   instruction_primary_model: Qwen/Qwen2.5-0.5B-Instruct
   instruction_fallback_model: roneneldan/TinyStories-33M
+
+local_training:
+  rows_per_file: 1500
+  max_files_per_task: 512
+  validation_fraction: 0.2
+  ridge_alpha: 1.0
+  hist_gradient_max_iter: 80
+  random_seed: 42
