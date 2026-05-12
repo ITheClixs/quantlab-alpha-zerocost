@@ -42,7 +42,7 @@ raw data
 
 ## 1. Absolute project rules
 
-Do not violate these rules:
+ Some Rules
 
 ```text
 1. Do not use random train-test split for financial time series.
@@ -50,9 +50,6 @@ Do not violate these rules:
 3. Do not fit scalers, imputers, encoders, or normalizers on validation or test data.
 4. Do not evaluate only accuracy.
 5. Do not report a strategy without transaction costs and turnover.
-6. Do not connect to a real brokerage API.
-7. Do not implement live real-money trading.
-8. Do not train a 12B to 14B parameter model from scratch.
 9. Do not full-fine-tune a 12B to 14B parameter model locally.
 10. Do not download massive datasets without checking disk and user intent.
 ```
@@ -389,3 +386,13 @@ experiments/jpx_baseline/
 
 The result must be reproducible from a clean repository using documented commands.
 
+new:
+
+now it is time for you to code a large language model for quantitative trading and quantitative research
+  with the inspiration of current models that you have downloaded in this repo. The model that you will code
+  will be medium to big sized and will then be integrated into a trading bot (ca. 20B-params) which will
+  detect signals and upside downs given the order flow or any ingestion of a market data. For this purpose
+  please reedit the README.md and AGENTS.md and also CLAUDE.md and also enhance them in a way that they are
+  way more efficient. The model needs to be capable of  JaneStreet kaggle competition market prediction and
+  needs to rank really high in that purpose. you are free to use any of your skills and HF and paper search
+  skills for that purpose and also your other skills such as /superpowers:writing-plans or your plan mode
