@@ -1,11 +1,19 @@
 artifact_budget:
-  max_total_gb: 100
-  reserve_gb_for_processed_outputs: 8
+  max_total_gb: 150
+  reserve_gb_for_processed_outputs: 12
   default_sort: size
+  hard_ceiling_gb: 165
+
+bucket_budgets:
+  hf_datasets: 50
+  kaggle: 40
+  models: 40
+  papers_and_derived: 20
 
 paths:
   raw_hf_root: data/raw/huggingface
   raw_paper_root: data/raw/papers
+  raw_kaggle_root: data/raw/kaggle
   processed_market_root: data/processed/market
   processed_research_root: data/processed/research
   model_root: models/huggingface
@@ -30,4 +38,8 @@ research_corpus:
   chunk_words: 420
   chunk_overlap_words: 80
   min_chunk_words: 80
-
+  parquet_shard_target_mb: 256
+  instruction_max_per_chunk: 3
+  instruction_max_new_tokens: 256
+  instruction_primary_model: Qwen/Qwen2.5-0.5B-Instruct
+  instruction_fallback_model: roneneldan/TinyStories-33M
