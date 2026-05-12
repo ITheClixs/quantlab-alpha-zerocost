@@ -1,6 +1,6 @@
 artifact_budget:
   max_total_gb: 150
-  reserve_gb_for_processed_outputs: 12
+  reserve_gb_for_processed_outputs: 0
   default_sort: size
   hard_ceiling_gb: 165
 
