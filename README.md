@@ -184,6 +184,8 @@ Let `p_t` be the close or mid price at event index `t`. For horizon `h`, the rea
 r_{t,h} = \frac{p_{t+h}}{p_t} - 1.
 ```
 
+Plain English: this measures the percentage price change from now (`t`) to a future step (`t+h`). A value of `0.01` means the price rose by roughly 1%; a value of `-0.01` means it fell by roughly 1%.
+
 The current OHLCV builder writes this as `future_return_h`; the order-book builder writes `future_mid_return_h`.
 
 The directional label is:
@@ -191,6 +193,8 @@ The directional label is:
 ```math
 y^{dir}_{t,h} = \mathbf{1}\{p_{t+h} > p_t\}.
 ```
+
+Plain English: this converts the future return into a simple up/down label. It returns `1` when the future price is higher than the current price, otherwise `0`.
 
 This is useful for directional accuracy, but the primary regression objective remains return prediction.
 
@@ -202,12 +206,16 @@ The one-step log return is:
 \ell_t = \log(p_t) - \log(p_{t-1}).
 ```
 
+Plain English: this is a stable way to measure one-step price movement. Log returns add cleanly over time and behave better than raw price differences when prices have different scales.
+
 For a window `w`, realized volatility is estimated as:
 
 ```math
 \sigma_{t,w} =
 \sqrt{\frac{1}{w-1} \sum_{i=0}^{w-1}(\ell_{t-i} - \bar{\ell}_{t,w})^2}.
 ```
+
+Plain English: this measures how unstable recent returns have been. A higher value means the market has been moving more violently over the last `w` observations.
 
 The configured windows are `5`, `20`, and `60`.
 
@@ -221,11 +229,15 @@ Mid price:
 m_t = \frac{b_t + a_t}{2}.
 ```
 
+Plain English: the mid price is the midpoint between the best price someone is willing to buy at and the best price someone is willing to sell at.
+
 Spread and relative spread:
 
 ```math
 s_t = a_t - b_t, \qquad s^{rel}_t = \frac{a_t - b_t}{m_t}.
 ```
+
+Plain English: the spread is the immediate trading friction in the order book. The relative spread rescales that friction by the price level, making it easier to compare across assets.
 
 Level-1 microprice:
 
@@ -235,11 +247,15 @@ Level-1 microprice:
 
 This moves the price estimate toward the side with lower displayed depth, which is why it is often more informative than the simple mid price.
 
+Plain English: if the bid side has much more size than the ask side, the microprice leans upward; if the ask side is heavier, it leans downward. It is a pressure-adjusted price estimate.
+
 Level-1 imbalance:
 
 ```math
 I^{(1)}_t = \frac{q^b_t - q^a_t}{q^b_t + q^a_t}.
 ```
+
+Plain English: this compares buy-side and sell-side depth at the best quotes. Positive values mean more displayed size on the bid; negative values mean more displayed size on the ask.
 
 Depth-`d` imbalance:
 
@@ -248,6 +264,8 @@ I^{(d)}_t =
 \frac{\sum_{i=1}^{d} q^b_{t,i} - \sum_{i=1}^{d} q^a_{t,i}}
      {\sum_{i=1}^{d} q^b_{t,i} + \sum_{i=1}^{d} q^a_{t,i}}.
 ```
+
+Plain English: this is the same pressure measurement, but it looks deeper into the order book instead of only the best bid and ask.
 
 The current order-book script computes depth features for `d in {1, 5, 10, 20}`.
 
@@ -258,6 +276,8 @@ The Ridge signal head standardizes features before fitting:
 ```math
 \tilde{x}_{i,j} = \frac{x_{i,j} - \mu_j}{\sigma_j + \epsilon}.
 ```
+
+Plain English: every feature is centered and scaled before fitting Ridge. This prevents large-unit features, such as volume, from dominating small-unit features, such as returns.
 
 Given standardized matrix `X`, target vector `y`, and regularization `alpha`, Ridge solves:
 
@@ -270,11 +290,15 @@ Given standardized matrix `X`, target vector `y`, and regularization `alpha`, Ri
 \right].
 ```
 
+Plain English: Ridge chooses coefficients that make prediction errors small while also penalizing very large coefficients. The penalty helps reduce overfitting when features are noisy or correlated.
+
 When `X^T X + alpha I` is invertible, the closed-form solution is:
 
 ```math
 \hat{\beta} = (X^\top X + \alpha I)^{-1} X^\top y.
 ```
+
+Plain English: this is the direct linear-algebra formula for the best Ridge coefficients. In practice, the library solves this numerically, but the equation shows that Ridge is a disciplined linear baseline.
 
 This is a strong first baseline because it exposes whether the engineered features contain linear predictive signal before more flexible models are tried.
 
@@ -286,11 +310,15 @@ The histogram gradient boosting regressor is an additive tree model:
 F_M(x) = \sum_{m=0}^{M} \eta f_m(x).
 ```
 
-where `eta` is the learning rate and each `f_m` is a shallow regression tree. For squared-error loss,
+Plain English: the final prediction is built by adding many small decision trees together. Each tree contributes a limited correction, and the learning rate `eta` controls how aggressively those corrections are added.
+
+Here, `eta` is the learning rate and each `f_m` is a shallow regression tree. For squared-error loss,
 
 ```math
 L(y, F(x)) = \frac{1}{2}(y - F(x))^2.
 ```
+
+Plain English: this loss charges the model for being far from the true future return. Squaring the error makes large misses much more expensive than small misses.
 
 the negative gradient at boosting step `m` is the residual:
 
@@ -299,6 +327,8 @@ g_{i,m} =
 -\frac{\partial L(y_i, F_{m-1}(x_i))}{\partial F_{m-1}(x_i)}
 = y_i - F_{m-1}(x_i).
 ```
+
+Plain English: each new tree tries to explain what the previous trees still got wrong. The residual is the remaining gap between the true value and the current model prediction.
 
 Each new tree is fit to these residuals. This lets the model capture nonlinear interactions such as spread-regime effects and depth-imbalance thresholds.
 
@@ -313,6 +343,8 @@ R^2_w =
      {\sum_i w_i y_i^2}.
 ```
 
+Plain English: this compares the model against the simple baseline of predicting zero for every row. Positive values mean the model improved on that baseline; negative values mean it made the weighted errors worse.
+
 The denominator uses a zero-mean baseline. A score above `0` means the model improves over predicting zero for every row.
 
 ### Directional Accuracy
@@ -325,6 +357,8 @@ DA =
 \sum_{i=1}^{N}
 \mathbf{1}\{\mathrm{sign}(y_i) = \mathrm{sign}(\hat{y}_i)\}.
 ```
+
+Plain English: this asks only whether the model called the direction correctly. It ignores the size of the move, so it is useful but not enough for trading decisions.
 
 Directional accuracy can improve while R2 remains weak, so it is treated as secondary evidence. A strategy still needs PnL, costs, and drawdown checks.
 
@@ -341,6 +375,8 @@ q_t =
 \right).
 ```
 
+Plain English: the position gets larger when the predicted return is large relative to expected volatility, but it is capped so the strategy cannot take unlimited risk.
+
 where `q_t` is the target position, `k` is a risk scale, and `q_max` is a hard position cap.
 
 One-step paper PnL with costs is:
@@ -351,6 +387,8 @@ q_t (p_{t+1} - p_t)
 - c \left|q_t - q_{t-1}\right|
 - \mathrm{slip}_t \left|q_t - q_{t-1}\right|.
 ```
+
+Plain English: paper PnL is the money made or lost from the price move, minus trading costs and slippage paid when the position changes.
 
 The net return stream should then be judged by:
 
@@ -365,6 +403,8 @@ The net return stream should then be judged by:
     \max_{u \le t} C_u - C_t
 \right).
 ```
+
+Plain English: Sharpe measures return per unit of volatility, while maximum drawdown measures the worst peak-to-trough loss in the equity curve. A strategy needs both because smooth gains and crash risk are different questions.
 
 where `A` annualizes the sampling frequency, `R_t` is net return, `C_t` is cumulative equity, and `MDD` is maximum drawdown.
 
