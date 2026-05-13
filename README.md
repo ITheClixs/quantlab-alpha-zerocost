@@ -180,17 +180,17 @@ The split is deliberate:
 
 Let `p_t` be the close or mid price at event index `t`. For horizon `h`, the realized future return is:
 
-$$
+```math
 r_{t,h} = \frac{p_{t+h}}{p_t} - 1.
-$$
+```
 
 The current OHLCV builder writes this as `future_return_h`; the order-book builder writes `future_mid_return_h`.
 
 The directional label is:
 
-$$
-y^{dir}_{t,h} = 1[p_{t+h} > p_t].
-$$
+```math
+y^{dir}_{t,h} = \mathbf{1}\{p_{t+h} > p_t\}.
+```
 
 This is useful for directional accuracy, but the primary regression objective remains return prediction.
 
@@ -198,20 +198,16 @@ This is useful for directional accuracy, but the primary regression objective re
 
 The one-step log return is:
 
-$$
+```math
 \ell_t = \log(p_t) - \log(p_{t-1}).
-$$
+```
 
 For a window `w`, realized volatility is estimated as:
 
-$$
+```math
 \sigma_{t,w} =
-\sqrt{
-    \frac{1}{w-1}
-    \sum_{i=0}^{w-1}
-    (\ell_{t-i} - \bar{\ell}_{t,w})^2
-}.
-$$
+\sqrt{\frac{1}{w-1} \sum_{i=0}^{w-1}(\ell_{t-i} - \bar{\ell}_{t,w})^2}.
+```
 
 The configured windows are `5`, `20`, and `60`.
 
@@ -221,50 +217,37 @@ Let `b_t` be best bid, `a_t` best ask, `q^b_t` best bid quantity, and `q^a_t` be
 
 Mid price:
 
-$$
+```math
 m_t = \frac{b_t + a_t}{2}.
-$$
+```
 
 Spread and relative spread:
 
-$$
-s_t = a_t - b_t,
-\qquad
-s^{rel}_t = \frac{a_t - b_t}{m_t}.
-$$
+```math
+s_t = a_t - b_t, \qquad s^{rel}_t = \frac{a_t - b_t}{m_t}.
+```
 
 Level-1 microprice:
 
-$$
-\mu_t =
-\frac{
-    a_t q^b_t + b_t q^a_t
-}{
-    q^b_t + q^a_t
-}.
-$$
+```math
+\mu_t = \frac{a_t q^b_t + b_t q^a_t}{q^b_t + q^a_t}.
+```
 
 This moves the price estimate toward the side with lower displayed depth, which is why it is often more informative than the simple mid price.
 
 Level-1 imbalance:
 
-$$
-I^{(1)}_t =
-\frac{q^b_t - q^a_t}{q^b_t + q^a_t}.
-$$
+```math
+I^{(1)}_t = \frac{q^b_t - q^a_t}{q^b_t + q^a_t}.
+```
 
 Depth-`d` imbalance:
 
-$$
+```math
 I^{(d)}_t =
-\frac{
-    \sum_{i=1}^{d} q^b_{t,i} -
-    \sum_{i=1}^{d} q^a_{t,i}
-}{
-    \sum_{i=1}^{d} q^b_{t,i} +
-    \sum_{i=1}^{d} q^a_{t,i}
-}.
-$$
+\frac{\sum_{i=1}^{d} q^b_{t,i} - \sum_{i=1}^{d} q^a_{t,i}}
+     {\sum_{i=1}^{d} q^b_{t,i} + \sum_{i=1}^{d} q^a_{t,i}}.
+```
 
 The current order-book script computes depth features for `d in {1, 5, 10, 20}`.
 
@@ -272,29 +255,26 @@ The current order-book script computes depth features for `d in {1, 5, 10, 20}`.
 
 The Ridge signal head standardizes features before fitting:
 
-$$
+```math
 \tilde{x}_{i,j} = \frac{x_{i,j} - \mu_j}{\sigma_j + \epsilon}.
-$$
+```
 
 Given standardized matrix `X`, target vector `y`, and regularization `alpha`, Ridge solves:
 
-$$
-\hat{\beta}
-=
+```math
+\hat{\beta} =
 \arg\min_{\beta}
 \left[
-    \lVert y - X\beta \rVert_2^2
-    + \alpha \lVert \beta \rVert_2^2
+    \left\|y - X\beta\right\|_2^2
+    + \alpha \left\|\beta\right\|_2^2
 \right].
-$$
+```
 
 When `X^T X + alpha I` is invertible, the closed-form solution is:
 
-$$
-\hat{\beta}
-=
-(X^T X + \alpha I)^{-1} X^T y.
-$$
+```math
+\hat{\beta} = (X^\top X + \alpha I)^{-1} X^\top y.
+```
 
 This is a strong first baseline because it exposes whether the engineered features contain linear predictive signal before more flexible models are tried.
 
@@ -302,27 +282,23 @@ This is a strong first baseline because it exposes whether the engineered featur
 
 The histogram gradient boosting regressor is an additive tree model:
 
-$$
-F_M(x) =
-\sum_{m=0}^{M}
-\eta f_m(x),
-$$
+```math
+F_M(x) = \sum_{m=0}^{M} \eta f_m(x).
+```
 
 where `eta` is the learning rate and each `f_m` is a shallow regression tree. For squared-error loss,
 
-$$
-L(y, F(x)) = \frac{1}{2}(y - F(x))^2,
-$$
+```math
+L(y, F(x)) = \frac{1}{2}(y - F(x))^2.
+```
 
 the negative gradient at boosting step `m` is the residual:
 
-$$
-g_{i,m}
-=
+```math
+g_{i,m} =
 -\frac{\partial L(y_i, F_{m-1}(x_i))}{\partial F_{m-1}(x_i)}
-=
-y_i - F_{m-1}(x_i).
-$$
+= y_i - F_{m-1}(x_i).
+```
 
 Each new tree is fit to these residuals. This lets the model capture nonlinear interactions such as spread-regime effects and depth-imbalance thresholds.
 
@@ -330,16 +306,12 @@ Each new tree is fit to these residuals. This lets the model capture nonlinear i
 
 The Jane Street local benchmark scores `responder_6` with sample weights:
 
-$$
-R^2_w
-=
+```math
+R^2_w =
 1 -
-\frac{
-    \sum_i w_i (y_i - \hat{y}_i)^2
-}{
-    \sum_i w_i y_i^2
-}.
-$$
+\frac{\sum_i w_i (y_i - \hat{y}_i)^2}
+     {\sum_i w_i y_i^2}.
+```
 
 The denominator uses a zero-mean baseline. A score above `0` means the model improves over predicting zero for every row.
 
@@ -347,14 +319,12 @@ The denominator uses a zero-mean baseline. A score above `0` means the model imp
 
 For trading interpretation, the repo also reports sign accuracy:
 
-$$
+```math
 DA =
 \frac{1}{N}
 \sum_{i=1}^{N}
-1[
-    sign(y_i) = sign(\hat{y}_i)
-].
-$$
+\mathbf{1}\{\operatorname{sign}(y_i) = \operatorname{sign}(\hat{y}_i)\}.
+```
 
 Directional accuracy can improve while R2 remains weak, so it is treated as secondary evidence. A strategy still needs PnL, costs, and drawdown checks.
 
@@ -362,45 +332,39 @@ Directional accuracy can improve while R2 remains weak, so it is treated as seco
 
 The repository does not connect to a live broker. A future paper-trading adapter should translate predictions into positions only after validation. A conservative accounting model is:
 
-$$
+```math
 q_t =
-clip(
+\operatorname{clip}\left(
     k \cdot \frac{\hat{r}_{t,h}}{\hat{\sigma}_{t,h} + \epsilon},
-    -q_{max},
-    q_{max}
-),
-$$
+    -q_{\max},
+    q_{\max}
+\right).
+```
 
 where `q_t` is the target position, `k` is a risk scale, and `q_max` is a hard position cap.
 
 One-step paper PnL with costs is:
 
-$$
-PnL_{t+1}
-=
+```math
+\mathrm{PnL}_{t+1} =
 q_t (p_{t+1} - p_t)
--
-c |q_t - q_{t-1}|
--
-slip_t |q_t - q_{t-1}|.
-$$
+- c \left|q_t - q_{t-1}\right|
+- \mathrm{slip}_t \left|q_t - q_{t-1}\right|.
+```
 
 The net return stream should then be judged by:
 
-$$
-Sharpe =
-\frac{
-    \sqrt{A} \, E[R_t]
-}{
-    std(R_t) + \epsilon
-},
+```math
+\mathrm{Sharpe} =
+\frac{\sqrt{A} \, \mathbb{E}[R_t]}
+     {\operatorname{std}(R_t) + \epsilon},
 \qquad
-MDD =
+\mathrm{MDD} =
 \max_t
 \left(
     \max_{u \le t} C_u - C_t
-\right),
-$$
+\right).
+```
 
 where `A` annualizes the sampling frequency, `R_t` is net return, `C_t` is cumulative equity, and `MDD` is maximum drawdown.
 
