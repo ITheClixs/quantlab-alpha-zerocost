@@ -323,7 +323,7 @@ For trading interpretation, the repo also reports sign accuracy:
 DA =
 \frac{1}{N}
 \sum_{i=1}^{N}
-\mathbf{1}\{\operatorname{sign}(y_i) = \operatorname{sign}(\hat{y}_i)\}.
+\mathbf{1}\{\mathrm{sign}(y_i) = \mathrm{sign}(\hat{y}_i)\}.
 ```
 
 Directional accuracy can improve while R2 remains weak, so it is treated as secondary evidence. A strategy still needs PnL, costs, and drawdown checks.
@@ -334,7 +334,7 @@ The repository does not connect to a live broker. A future paper-trading adapter
 
 ```math
 q_t =
-\operatorname{clip}\left(
+\mathrm{clip}\left(
     k \cdot \frac{\hat{r}_{t,h}}{\hat{\sigma}_{t,h} + \epsilon},
     -q_{\max},
     q_{\max}
@@ -357,7 +357,7 @@ The net return stream should then be judged by:
 ```math
 \mathrm{Sharpe} =
 \frac{\sqrt{A} \, \mathbb{E}[R_t]}
-     {\operatorname{std}(R_t) + \epsilon},
+     {\mathrm{std}(R_t) + \epsilon},
 \qquad
 \mathrm{MDD} =
 \max_t
