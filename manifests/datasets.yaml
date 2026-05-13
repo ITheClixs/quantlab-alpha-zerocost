@@ -27,6 +27,18 @@ defaults:
     - "*.tar.gz"
 
 datasets:
+  - id: TnnnT0326/Jane_Street_Competition
+    group: jane_street_realtime_hf_mirror
+    priority: 5
+    license_hint: unknown
+    allow_patterns:
+      - "*.parquet"
+      - "*.csv"
+      - "*.py"
+      - "README*"
+      - "LICENSE*"
+    purpose: "Free Hugging Face mirror of Jane Street real-time market data forecasting for local benchmark execution when Kaggle auth is unavailable."
+
   - id: Neil0930/quantitative_finance_dataset
     group: quant_instruction
     priority: 10
@@ -301,4 +313,3 @@ datasets:
     license_hint: cc-by-4.0
     topics: [time_series]
     purpose: "Electricity Transformer Temperature standard forecasting benchmark."
-
