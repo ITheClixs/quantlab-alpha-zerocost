@@ -1,0 +1,79 @@
+data:
+  jane_street_root: data/raw/huggingface/TnnnT0326__Jane_Street_Competition
+  preprocessed_alt_root: data/raw/kaggle/datasets/saurabhshahane__jane-street-preprocessed-train
+  synthetic_root: data/raw/kaggle/datasets/christoffer__synthetic-jane-street-dataset
+  permanent_holdout_fraction: 0.20
+  target_column: responder_6
+  weight_column: weight
+  group_column: date_id
+
+cv:
+  n_folds: 5
+  purge_days: 5
+  embargo_days: 5
+  random_seed: 42
+
+features:
+  lag_windows: [1, 2, 5, 10, 20]
+  rolling_windows: [5, 20, 60]
+  cross_sectional_ranks: true
+  interaction_pairs_top_n: 20
+  include_noise_feature: true
+
+models:
+  ridge:
+    alpha_grid: [0.01, 0.1, 1.0, 10.0, 100.0]
+  lightgbm:
+    num_leaves: 63
+    max_depth: -1
+    learning_rate: 0.05
+    n_estimators: 2000
+    early_stopping_rounds: 100
+    feature_fraction: 0.9
+    bagging_fraction: 0.8
+  xgboost:
+    max_depth: 8
+    learning_rate: 0.05
+    n_estimators: 2000
+    early_stopping_rounds: 100
+    tree_method: hist
+  catboost:
+    depth: 12
+    learning_rate: 0.05
+    n_estimators: 2000
+    early_stopping_rounds: 100
+  mlp:
+    hidden_dims: [512, 256, 128]
+    dropout: 0.3
+    learning_rate: 0.001
+    batch_size: 1024
+    max_epochs: 50
+    patience: 5
+    mixed_precision: true
+  sequence:
+    architecture: cnn1d
+    seq_len: 16
+    kernel_sizes: [3, 5, 7]
+    n_filters: 64
+    max_epochs: 30
+    learning_rate: 0.0005
+
+stacking:
+  method: linear
+  fit_on: oof_predictions
+
+optuna:
+  trials_per_fold: 200
+  pruner: median
+  sampler: tpe
+
+training_budget:
+  base_training_hours: 24
+  orderbook_autoencoder_hours: 12
+  foundation_features_hours: 6
+  optuna_total_hours: 48
+
+success_gate:
+  min_holdout_r2: 0.012
+  max_fold_std_r2: 0.002
+  min_ridge_baseline_improvement_pct: 60
