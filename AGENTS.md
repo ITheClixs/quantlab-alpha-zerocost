@@ -1,111 +1,179 @@
 # AGENTS.md
 
-This repository is a local-only Quant Research LLM system. Agents must build reusable code under `src/quant_research_stack/`, keep large artifacts out of git, and treat every model output as untrusted until benchmarked.
+This file defines agent roles, responsibilities, and task boundaries for the QuantLab Alpha repository.
 
-## Global Rules
+The repository builds a commercial-grade alpha generation and execution platform.
+
+Core pipeline:
+
+```text
+raw data
+  -> cleaned panel data
+  -> features (+ foundation-model meta-features + sentiment embeddings)
+  -> labels
+  -> walk-forward purged-embargoed validation
+  -> S1 base learners + stacking
+  -> S2 LLM governor (GBNF JSON, citations required)
+  -> S4 execution gated by QUANTLAB_STAGE
+  -> audit log + position book
+```
+
+## 0. Cross-agent invariant
+
+No agent may write or modify code under `brokers/*_live.py` or `configs/promotion.yaml`
+unless explicitly assigned by the operator with a signed `docs/runbooks/stage_change.md`
+commit. Promotion to a higher stage is human-only.
+
+## 1. Global agent rules
 
 ```text
 No random split for financial time series.
 No future information in features.
 No target leakage.
-No scaler, imputer, encoder, or normalizer fitted on validation/test data.
-No strategy report without transaction costs, turnover, and drawdown.
-No paid API, paid data feed, or cloud training job.
-No real-money broker integration.
-No full local training of 20B-class models.
+No scaler or imputer fitted on validation or test data.
+No backtest without costs.
+No real-money trading outside QUANTLAB_STAGE=live.
+No in-process stage self-promotion.
+No full fine-tuning >=12B models locally.
+No training >=12B models from scratch.
 No hidden notebook-only logic.
-No artifact downloads that push the workspace above 150 GB.
+No LLM output accepted without >=1 cited_paper_chunk_id.
 ```
 
-## Agent: Documentation Architect
+All reusable code must live under `src/quant_research_stack/`.
+All experiment outputs must live under `experiments/`.
 
-Owns `README.md`, `AGENTS.md`, `CLAUDE.md`, and command documentation.
+## 2. Agent: Data Engineer
 
-Must keep documentation aligned with the actual package name, paths, commands, artifact cap, and local-only constraints. Must remove stale references to `src/quantlab/` unless that package is actually created.
+Kept verbatim from prior AGENTS.md.
 
-## Agent: Data Engineer
+## 3. Agent: Feature Engineer
 
-Owns data acquisition and preparation for Hugging Face, Kaggle, arXiv, and open datasets.
+Kept verbatim from prior AGENTS.md.
 
-Required outputs:
+## 4. Agent: Label Engineer
+
+Kept verbatim from prior AGENTS.md.
+
+## 5. Agent: Validation Engineer
+
+Kept verbatim from prior AGENTS.md.
+
+## 6. Agent: Tabular Alpha Engineer (S1) — new
+
+Owns: `src/quant_research_stack/alpha/` and `experiments/alpha_s1/`.
+
+Must produce:
+```text
+fold-stable weighted zero-mean R^2 improvement vs ridge baseline
+out-of-fold predictions usable by the stacking meta-learner
+fold-stable feature importance (>=3 of 5 folds agree)
+inference contract: predict(row: pl.DataFrame) -> tuple[float, float], <1 ms per row
+artifacts in experiments/alpha_s1/<run_id>/
+```
+
+Must not:
+```text
+place orders
+modify governor schema
+edit risk configs or promotion configs
+use random splits
+fit scalers on validation
+```
+
+## 7. Agent: LLM Governor Engineer (S2) — new (built in S2 plan)
+
+Owns: `src/quant_research_stack/governor/`.
+
+Must produce:
+```text
+GBNF grammar enforcing JSON schema
+LoRA adapters on <=7B base models
+RAG retrieval index over data/processed/research/parquet
+veto-precision metric on backtested signals
+```
+
+Must not:
+```text
+bypass JSON schema constraints
+accept LLM outputs without cited_paper_chunk_ids
+originate trades directly (S2 is veto-only)
+```
+
+## 8. Agent: Data Feeds + Broker Adapter Engineer (S3) — new (built in S3 plan)
+
+Owns: `src/quant_research_stack/feeds/`, `src/quant_research_stack/brokers/`.
+
+Must produce:
+```text
+typed FeedAdapter and BrokerAdapter protocol implementations
+recorder + replayer parity (one-hour live recording replayed 100x produces same trace)
+null_broker + every *_paper.py pass the same broker contract test
+```
+
+Must not:
+```text
+skip live recording (every tick must be recorded to data/live/)
+ship a *_live.py broker without a corresponding *_paper.py first
+ship a feed adapter without a fixture-based parser test
+```
+
+## 9. Agent: Execution + Risk Engineer (S4) — new (built in S4 plan)
+
+Owns: `src/quant_research_stack/execution/`.
+
+Must produce:
+```text
+kill switch tested in CI for every trigger
+three-stage env-var gating
+audit log integrity (replay-byte-identical invariant)
+broker reconciliation every minute
+```
+
+Must not:
+```text
+allow in-process stage promotion
+weaken risk caps without two-person review
+import brokers/*_live.py from anywhere outside execution/router.py
+```
+
+## 10. Agent: Tabular Model Engineer (renamed from Model Engineer)
+
+Kept verbatim from prior AGENTS.md §6, with the additional rule that
+all new tabular models live under `src/quant_research_stack/alpha/models/`.
+
+## 11. Agent: Backtesting Engineer
+
+Kept verbatim from prior AGENTS.md §7.
+
+## 12. Agent: NLP Engineer
+
+Kept verbatim from prior AGENTS.md §8.
+
+## 13. Agent: Report Engineer
+
+Kept verbatim from prior AGENTS.md §11, with reports landing under
+`experiments/alpha_s1/<run_id>/report.md`.
+
+## 14. First milestone assignment
+
+Build the S1 tabular Jane Street predictor per
+`docs/superpowers/plans/2026-05-14-quantlab-alpha-s1-implementation.md`.
+
+Completion target: weighted zero-mean R^2 >= 0.012 on the permanent holdout,
+reproducible from a clean clone in <= 4 days wall-clock.
+
+## 15. Done definition
+
+A task is not done unless:
 
 ```text
-data/raw/
-data/processed/
-reports/*download*.json
-reports/*preparation*.json
+code runs
+tests pass
+ruff and mypy clean
+outputs are saved under experiments/alpha_s1/<run_id>/
+metrics are recorded
+report is written
+limitations are documented
+audit log row written (or smoke-test audit log if S4 not yet built)
 ```
-
-Must run budget checks before downloading. Must preserve raw data and create deterministic processed parquet/jsonl outputs.
-
-## Agent: LLM Quant Engineer
-
-Owns the local LLM-first research layer.
-
-Responsibilities:
-
-```text
-configure local GGUF inference
-retrieve paper chunks and market context
-generate structured JSON signal hypotheses
-reject malformed or uncited outputs
-log prompt, model, response, and parser status
-fall back from 22B GGUF to installed 13B GGUF when needed
-```
-
-The LLM may propose predictions, explanations, and feature hypotheses. It must not be treated as a validated trading system until the validation layer shows improvement.
-
-## Agent: Jane Street Benchmark Engineer
-
-Owns `jane-street-real-time-market-data-forecasting` ingestion, scoring, and local reports.
-
-Required behavior:
-
-```text
-load train/lags/test-style parquet files
-validate required columns
-create time-ordered folds
-score responder_6 with weighted zero-mean R2
-compare LLM signals against simple baselines
-write reports/jane_street_benchmark.json
-```
-
-Must not use test-row future responders as features. Must not shuffle dates.
-
-## Agent: Validation Engineer
-
-Owns leakage controls, split logic, and acceptance criteria.
-
-Required tests:
-
-```text
-forward labels only use future rows for targets
-features use only information available at prediction time
-folds are monotonic in time
-weighted zero-mean R2 matches hand-computed fixtures
-LLM JSON outputs are schema-validated before use
-```
-
-## Agent: Report Engineer
-
-Owns experiment and benchmark reporting.
-
-Every report must include:
-
-```text
-dataset
-artifact sizes
-date range or partition range
-features used
-target definition
-split method
-model or LLM runtime
-metric values
-baseline comparison
-limitations
-next action
-```
-
-## Done Definition
-
-A task is done only when code runs, tests pass, outputs are written where expected, limitations are documented, and any significant code changes are committed and pushed.

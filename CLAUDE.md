@@ -1,18 +1,19 @@
 # CLAUDE.md
 
-This file defines how coding agents should behave in this repository.
+This file defines how Claude Code or any similar coding agent must behave inside the QuantLab Alpha repository.
 
-## Project Goal
+Project name:
 
-Build a local-first large-language-model quantitative research system for market prediction experiments. The system should be original, rigorous, and benchmark-driven: an LLM proposes structured signals and explanations, while local benchmark code decides whether those signals are useful.
 ```text
-QuantLab
+QuantLab Alpha
 ```
 
 Project goal:
 
 ```text
-Build a rigorous local quantitative finance machine learning research system on Apple Silicon.
+Build a commercial-grade alpha generation and execution platform with stage-gated
+real-money trading, a tabular predictor (LightGBM / XGBoost / CatBoost / MLP stack),
+and an LLM governor that vetoes signals inconsistent with the local research corpus.
 ```
 
 Target machine:
@@ -23,6 +24,7 @@ MacBook Air M4
 macOS
 Apple Silicon MPS available through PyTorch
 MLX available for local LLM inference
+525 GB free disk; 208 GB corpus already on disk
 ```
 
 Primary pipeline:
@@ -30,122 +32,105 @@ Primary pipeline:
 ```text
 raw data
   -> cleaned panel data
-  -> features
+  -> features (engineered + foundation-model meta-features + sentiment embeddings)
   -> labels
-  -> walk-forward validation
-  -> model training
-  -> predictions
-  -> backtest
-  -> paper trading simulator
+  -> walk-forward purged-embargoed validation
+  -> base learners + stacking meta-learner
+  -> S1 predictions
+  -> S2 LLM governor (GBNF JSON, paper citations required)
+  -> S4 execution gated by QUANTLAB_STAGE (paper / live_shadow / live)
+  -> audit log + position book
 ```
-
----
 
 ## 1. Absolute project rules
 
- Some Rules
+Do not violate these rules:
 
 ```text
-1. Do not use random train-test split for financial time series.
-2. Do not use future data in features.
-3. Do not fit scalers, imputers, encoders, or normalizers on validation or test data.
-4. Do not evaluate only accuracy.
-5. Do not report a strategy without transaction costs and turnover.
-9. Do not full-fine-tune a 12B to 14B parameter model locally.
-10. Do not download massive datasets without checking disk and user intent.
+1.  Do not use random train-test split for financial time series.
+2.  Do not use future data in features.
+3.  Do not fit scalers, imputers, encoders, or normalizers on validation or test data.
+4.  Do not evaluate only accuracy.
+5.  Do not report a strategy without transaction costs and turnover.
+6.  Do not connect to a real-money broker outside QUANTLAB_STAGE=live. The stage env var
+    is operator-controlled only. The kill switch is always armed.
+7.  Real-money trading is the eventual operating mode. It is gated behind
+    paper -> live_shadow -> live promotion. In-process self-promotion is forbidden.
+8.  Do not train a 12B to 14B parameter model from scratch.
+9.  Do not full-fine-tune a 12B to 14B parameter model locally.
+10. LoRA adapters on <=7B models are permitted. Full fine-tune of >3B requires spec approval.
+11. S1 tabular predictor is the only authoritative source of numeric forecasts. The LLM
+    never originates trades, only vetoes or explains them.
+12. Every LLM signal must cite >=1 chunk_id from the local research corpus or be returned
+    as insufficient_evidence.
+13. Do not modify configs/promotion.yaml or any brokers/*_live.py without two-person review.
+14. Do not download massive datasets without checking disk and user intent.
 ```
-
----
 
 ## 2. Preferred implementation order
 
-Implement in this order:
+Implement subsystems in this order, each gated by its own success criteria:
 
 ```text
-1. Project scaffolding
-2. Environment validation
-3. Dataset download scripts
-4. Raw to Parquet conversion
-5. Canonical panel schema
-6. Feature generation
-7. Label generation
-8. Walk-forward split
-9. Leakage tests
-10. Ridge baseline
-11. LightGBM baseline
-12. Cross-sectional backtest
-13. Report generation
-14. G-Research crypto pipeline
-15. Optiver pipeline
-16. Jane Street pipeline
-17. FinBERT sentiment features
-18. Small PyTorch MLP
-19. Sequence models
-20. Paper trading simulator
-21. Optional MLX local LLM assistant
+S1 Tabular Predictor (this plan)
+S2 LLM Governor + RAG
+S3 Data Feeds + Broker Abstraction
+S4 Execution + Risk + Promotion Gates
 ```
 
----
+Each subsystem gets its own design spec under docs/superpowers/specs/ and its own
+implementation plan under docs/superpowers/plans/.
 
 ## 3. Repository structure
 
-Expected structure:
-
 ```text
 QuantLab/
-  data/
-    raw/
-    processed/
-    features/
-    labels/
-    splits/
-    backtests/
-    paper_trading/
-  models/
-    tree/
-    torch/
-    sentiment/
-    embeddings/
-    llm/
-    mlx/
-  notebooks/
-  reports/
+  configs/
+    stack.yaml          global paths, artifact budget, model runtime
+    alpha.yaml          S1 hyperparameters, training power budget
+    risk.yaml           S4 risk caps (created in S4 plan)
+    promotion.yaml      S4 stage gates (created in S4 plan)
+  manifests/            HF / Kaggle / paper manifests
+  scripts/              CLI entry points
+  src/quant_research_stack/
+    alpha/              S1 tabular predictor
+    governor/           S2 LLM governor (created in S2 plan)
+    feeds/              S3 market data adapters (created in S3 plan)
+    brokers/            S3 broker adapters (created in S3 plan)
+    execution/          S4 execution + risk (created in S4 plan)
+    artifacts.py        shared utilities
+    budget.py           artifact budget accounting
+    jane_street.py      legacy JS benchmark, kept for parity tests
+    kaggle_artifacts.py kaggle manifest loader
+    kaggle_downloads.py kaggle downloader
+    llm_quant.py        LLM runtime (used by S2)
+    local_training.py   legacy trainer, kept for parity tests
   experiments/
-  logs/
-  config/
-  scripts/
-  src/
-    quantlab/
-      data/
-      features/
-      labels/
-      splits/
-      models/
-      backtest/
-      paper/
-      execution/
-      research/
-      utils/
-  tests/
+    alpha_s1/<run_id>/  per-run artifacts (metrics, predictions, models, report)
+  data/                 git-ignored; raw HF/Kaggle/papers + processed
+  models/               git-ignored; HF model snapshots + trained artifacts
+  reports/              generated metrics, inventories, plans
+  docs/
+    superpowers/specs/  brainstormed designs
+    superpowers/plans/  implementation plans
+    runbooks/           stage promotion, kill switch, disaster recovery
+    architecture/adrs/  architecture decision records
+  tests/                pytest unit and integration tests
 ```
 
-Do not put important project logic only in notebooks. Notebooks may be used for exploration, but reusable logic must live under `src/quantlab`.
-
----
+Do not put important project logic only in notebooks. Reusable logic must live under `src/quant_research_stack/`.
 
 ## 4. Coding style
 
-Use:
-
 ```text
 Python 3.11
-type hints
+type hints on all public surfaces
 dataclasses or pydantic for configuration
 Polars or DuckDB for large preprocessing
-Pandas for model interface when necessary
+Pandas only for model interface when necessary
 Parquet for intermediate storage
-Joblib for tree model artifacts
-Torch save for neural model artifacts
+Joblib for tree-model artifacts
+torch.save for neural-model artifacts
 JSON for metrics
 YAML for configs
 ```
@@ -170,137 +155,155 @@ large monolithic scripts
 silent exception swallowing
 ```
 
----
-
-The first benchmark anchor is Kaggle `jane-street-real-time-market-data-forecasting`.
-
-## Hard Constraints
+Additional rule:
 
 ```text
-Local Mac execution only.
-No paid APIs.
-No cloud jobs.
-No real-money broker integration.
-No random financial time-series splits.
-No target leakage.
-No future-derived features.
-No full local training of 20B-class models.
-No artifact footprint above 150 GB.
+Any module that places real orders (brokers/*_live.py) is forbidden from being imported
+by tests or training code. Tests use null_broker.py or *_paper.py only.
 ```
 
-Free downloads from Kaggle, Hugging Face, arXiv, and open web sources are allowed only when the artifact budget remains below the configured ceiling.
+## 5. Financial ML methodology
 
-## Actual Repository Shape
-
-Reusable code lives under:
+Keep prior rules verbatim (leakage-safe features, forward-only labels, walk-forward
+splits) and add:
 
 ```text
-src/quant_research_stack/
+5.4 S1 must beat the Optuna-tuned LightGBM baseline by >=10% weighted zero-mean R^2 on
+    the permanent holdout before being released to S4 in any stage.
+5.5 Adversarial validation between train and holdout: any feature whose classifier AUC
+    > 0.6 between train and holdout is dropped or transformed.
+5.6 A seeded Gaussian noise feature is included in every training run. Any engineered
+    feature ranked below it across >=3 of 5 folds is removed.
 ```
 
-Primary ignored artifacts live under:
+## 6. Model hierarchy (S1)
+
+Implement base learners in this order:
 
 ```text
-data/raw/
-data/processed/
-models/huggingface/
-reports/
+1. Ridge regression  (refactored from local_training.py)
+2. LightGBM
+3. XGBoost
+4. CatBoost
+5. compact PyTorch MLP
+6. 1D-CNN sequence model
+7. stacking meta-learner (linear, on OOF predictions)
 ```
 
-Do not create a parallel `src/quantlab/` package unless the repository is intentionally migrated.
+Tree models are the default for tabular financial data. Neural networks must beat tree
+baselines on the OOF metric before they are added to the stack.
 
-## Preferred Implementation Order
+## 7. Backtesting requirements (carried to S4 plan)
+
+Kept verbatim from prior CLAUDE.md.
+
+## 8. Apple Silicon policy
 
 ```text
-1. Documentation and architecture alignment.
-2. Artifact budget accounting.
-3. Free-data downloaders with dry-run mode.
-4. Jane Street 2024 ingestion and scoring harness.
-5. Local LLM runtime wrapper.
-6. RAG over paper/research chunks.
-7. Structured LLM signal schema and parser.
-8. Baseline benchmark reports.
-9. Iterative score improvements.
-10. Paper-trading simulator only after benchmark validation.
+PyTorch MPS when available
+MLX for local LLM inference
+LightGBM / XGBoost / CatBoost on CPU
+LoRA adapters on <=7B models only
+no full fine-tune of >=12B models locally
 ```
 
-## LLM-First Policy
-
-The LLM is the primary research interface. It should:
+Training power budget per full retrain cycle (per spec 4.3):
 
 ```text
-retrieve research
-summarize market context
-propose signal hypotheses
-emit structured prediction JSON
-explain feature relevance
-criticize leakage and overfitting risk
-mentor the terminal workflow
+S1 base training:                up to 24 h wall-clock
+Orderbook auto-encoder pretrain: up to 12 h
+LoRA adapter S2:                 up to 8 h
+Foundation-model feature extract: up to 6 h
+Stacking + Optuna meta-search:   up to 48 h combined
+total worst case:                ~4 days end-to-end
 ```
 
-The LLM must not be trusted by default. Invalid JSON, missing citations, missing feature evidence, or unsupported confidence must be rejected.
+## 9. Local LLM policy
 
-## Local Model Policy
-
-Use quantized local inference for large models:
+Allowed:
 
 ```text
-primary target: 22B-class GGUF when downloaded and runnable
-fallback target: installed 13B finance GGUF
-small helpers: finance embeddings, FinBERT, Chronos/Kronos/TimeMoE-style local models
+veto / explain in S2
+research summarization
+feature brainstorming
+documentation summarization
+small finance text classification
 ```
 
-20B-class local models may be used for inference, prompt/RAG augmentation, and signal generation. Full local training is out of scope on the Mac. Smaller adapters, distilled models, or benchmark-specific tabular predictors may be trained locally when tests and runtime allow.
-
-## Jane Street Benchmark Rules
-
-For `jane-street-real-time-market-data-forecasting`:
+Disallowed:
 
 ```text
-target responder: responder_6
-primary metric: weighted zero-mean R2
-validation: time-ordered folds
-baseline floor: constant/zero predictor and simple local model
-report path: reports/jane_street_benchmark.json
+direct trade origination
+unvalidated market prediction
+trade decisions without paper-chunk citations
+training from scratch
+full fine-tuning >=12B models locally
 ```
 
-Never shuffle dates. Never use responder columns from future rows as features. Never present a public leaderboard claim unless produced by an actual Kaggle submission.
-
-## Testing Commands
-
-Run before completion:
-
-```bash
-uv run python -m compileall scripts src
-uv run pytest -q
-uv run ruff check src tests scripts
-```
-
-If `ruff` reports pre-existing style issues outside the edited area, document them rather than hiding them.
-
-## Completion Criteria
-
-Before calling work complete:
+## 10. Testing requirements
 
 ```text
-docs reflect current architecture
-tests pass
-budget report works
-benchmark harness has fixture coverage
-LLM parser has fixture coverage
-reports are reproducible
-git status is clean or unrelated user changes are explicitly noted
+PYTHONPATH=src pytest -q
+ruff check src scripts tests
+mypy src
+PYTHONPATH=src uv run python scripts/audit_replay_check.py last-day   # added by S4 plan
 ```
 
-The result must be reproducible from a clean repository using documented commands.
+## 11. Risk and execution
 
-new:
+Single env var QUANTLAB_STAGE controls the broker class loaded at process start:
 
-now it is time for you to code a large language model for quantitative trading and quantitative research
-  with the inspiration of current models that you have downloaded in this repo. The model that you will code
-  will be medium to big sized and will then be integrated into a trading bot (ca. 20B-params) which will
-  detect signals and upside downs given the order flow or any ingestion of a market data. For this purpose
-  please reedit the README.md and AGENTS.md and also CLAUDE.md and also enhance them in a way that they are
-  way more efficient. The model needs to be capable of  JaneStreet kaggle competition market prediction and
-  needs to rank really high in that purpose. you are free to use any of your skills and HF and paper search
-  skills for that purpose and also your other skills such as /superpowers:writing-plans or your plan mode
+```text
+paper        -> brokers/*_paper.py
+live_shadow  -> brokers/null_broker.py + read-only real account
+live         -> brokers/*_live.py
+```
+
+In-process self-promotion is forbidden. Promotion requires:
+
+```text
+- a signed docs/runbooks/stage_change.md commit
+- updated .env file
+- process restart
+```
+
+Hard kill conditions (any one halts trading and writes audit row "kill_trigger"):
+
+```text
+- daily realized DD > 5% of account equity
+- cumulative DD > 15% from peak
+- two consecutive minutes without market data (crypto) or 30 min (equity)
+- model age > 7 days without successful S1 retrain
+- KILL_TRADING file present in repo root
+- SIGTERM or SIGINT received
+```
+
+## 12. Observability and audit
+
+Every decision in S2/S3/S4 lands in an append-only JSONL log under `logs/audit/`.
+Each rotation is `chmod a-w` so the file cannot be modified after closing.
+Replay of the audit log must reproduce the same decision sequence byte-for-byte.
+
+## 13. Completion criteria for the S1 milestone
+
+The S1 milestone is complete only if all of these exist under `experiments/alpha_s1/<run_id>/`:
+
+```text
+metadata.json     git_sha, data_hashes, hyperparams, fold definition
+predictions.parquet
+metrics.json      weighted_zero_mean_r2 >= 0.012 on holdout
+feature_importance.parquet
+cv_folds.json
+models/
+  ridge.joblib
+  lightgbm.txt
+  xgboost.json
+  catboost.cbm
+  mlp.pt
+  sequence.pt
+  stacker.joblib
+report.md
+audit_log_smoke.jsonl    proof S1 wrote to the audit format expected by S4
+```
+
+The result must be reproducible from a clean repository using `make full-retrain-s1`.
