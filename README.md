@@ -41,6 +41,28 @@ flowchart LR
 
 The LLM can rank hypotheses and explain a forecast, but a signal is accepted only when the validation layer improves over simple baselines.
 
+## Research Questions
+
+This workspace is organized around testable research questions rather than one-off notebooks:
+
+| ID | Question | Current evidence surface |
+|---|---|---|
+| RQ1 | Do order-book imbalance and microprice features contain short-horizon predictive signal after time-ordered validation? | `prepare_orderbook_data.py`, `train_local_signal_models.py`, `reports/local_signal_training_broad.json` |
+| RQ2 | Can a simple linear baseline beat the zero predictor on Jane Street `responder_6` before more complex models are attempted? | `run_jane_street_benchmark.py`, `reports/jane_street_benchmark_1m.json` |
+| RQ3 | Can a local LLM explain and critique signals while being constrained by retrieved research chunks and strict JSON validation? | `llm_quant.py`, `run_llm_signal.py`, `data/processed/research/research_corpus.jsonl` |
+| RQ4 | Which hypotheses survive a path from open data to feature engineering, out-of-sample scoring, and paper-trading accounting? | `configs/stack.yaml`, manifests, experiments, reports |
+
+## Contributions
+
+The repository contributes a local research harness rather than a claimed profitable strategy:
+
+1. a reproducible artifact plan for public market, order-book, paper, and model data;
+2. feature builders for OHLCV returns, realized volatility, spread, microprice, and multi-depth imbalance;
+3. supervised local signal heads with Ridge and histogram gradient boosting baselines;
+4. a Jane Street-style weighted zero-mean R2 benchmark on `responder_6`;
+5. a retrieval-augmented local GGUF LLM interface that must cite retrieved research chunks;
+6. documentation that separates prediction, explanation, validation, and paper-trading accounting.
+
 ## Current Status
 
 As of the latest local execution on May 13, 2026:
@@ -407,6 +429,394 @@ The net return stream should then be judged by:
 Plain English: Sharpe measures return per unit of volatility, while maximum drawdown measures the worst peak-to-trough loss in the equity curve. A strategy needs both because smooth gains and crash risk are different questions.
 
 where `A` annualizes the sampling frequency, `R_t` is net return, `C_t` is cumulative equity, and `MDD` is maximum drawdown.
+
+## Advanced Research-Grade Derivations
+
+The formulas below are the deeper mathematical frame behind the current implementation and the natural next research extensions. They are written as modeling contracts: a formula belongs in the README only if it maps to an existing feature, metric, benchmark, or planned local extension.
+
+### Weighted Empirical Risk for Market Prediction
+
+For a financial prediction task, each row `i` has features `x_i`, target `y_i`, optional sample weight `w_i`, and model `f_theta`. The general supervised objective is:
+
+```math
+\hat{\theta}
+=
+\arg\min_{\theta}
+\left[
+    \frac{1}{\sum_i w_i}
+    \sum_{i=1}^{N} w_i \, \ell(y_i, f_{\theta}(x_i))
+    + \lambda \Omega(\theta)
+\right].
+```
+
+Plain English: the model is trained to reduce weighted prediction errors while a regularizer discourages unstable or overly complex parameters.
+
+For squared-error return prediction, the loss is:
+
+```math
+\ell(y_i, f_{\theta}(x_i)) = (y_i - f_{\theta}(x_i))^2.
+```
+
+Plain English: a prediction that is twice as wrong receives four times the penalty. This makes large forecast misses dominate the training objective.
+
+The Jane Street benchmark is a special case with `y_i = responder_6`, `w_i = weight`, and `f_theta(x_i)` equal to the model's row-level prediction.
+
+### Signal, Noise, and the Irreducible Error Floor
+
+A realistic market label can be decomposed as:
+
+```math
+y_i = f^{star}(x_i) + \epsilon_i,
+\qquad
+\mathbb{E}[\epsilon_i \mid x_i] = 0.
+```
+
+Plain English: the observed future return is the learnable part plus noise. Even a perfect model cannot remove the random component.
+
+The expected squared error of a model can be decomposed into:
+
+```math
+\mathbb{E}\left[(y - \hat{f}(x))^2\right]
+=
+\left(\mathrm{Bias}[\hat{f}(x)]\right)^2
++ \mathrm{Var}[\hat{f}(x)]
++ \sigma_{\epsilon}^{2}.
+```
+
+Plain English: prediction error comes from systematic underfitting, estimation instability, and irreducible market noise. This is why the README keeps simple baselines: complex models may reduce bias while increasing variance.
+
+### Ridge as a Shrinkage Estimator
+
+For standardized features, Ridge can be written as a linear smoother:
+
+```math
+\hat{y}
+=
+H_{\alpha} y,
+\qquad
+H_{\alpha}
+=
+X(X^\top X + \alpha I)^{-1}X^\top.
+```
+
+Plain English: Ridge maps the observed targets into fitted predictions through a smoothing matrix. Larger `alpha` makes the fit smoother and less reactive to noise.
+
+The effective number of fitted degrees of freedom is:
+
+```math
+df_{\alpha} = \mathrm{tr}(H_{\alpha}).
+```
+
+Plain English: this acts like the number of active model parameters after shrinkage. It is usually smaller than the raw feature count.
+
+If `sigma_e^2` is the residual noise variance, the approximate prediction variance at a new point `x_0` is:
+
+```math
+\mathrm{Var}[\hat{f}(x_0)]
+\approx
+\sigma_e^2
+x_0^\top
+(X^\top X + \alpha I)^{-1}
+X^\top X
+(X^\top X + \alpha I)^{-1}
+x_0.
+```
+
+Plain English: predictions become unstable when the feature matrix is ill-conditioned or when the new point sits in a poorly observed region of feature space.
+
+### Functional Gradient View of Histogram Boosting
+
+Gradient boosting can be understood as functional gradient descent. Starting with an initial constant model:
+
+```math
+F_0(x) = \arg\min_c \sum_{i=1}^{N} \ell(y_i, c).
+```
+
+Plain English: the first model is just the best constant prediction before any tree is added.
+
+At step `m`, the pseudo-residual is:
+
+```math
+r_{i,m}
+=
+-\left.
+\frac{\partial \ell(y_i, z)}
+     {\partial z}
+\right|_{z = F_{m-1}(x_i)}.
+```
+
+Plain English: the pseudo-residual is the direction that would most quickly reduce the loss for the current model.
+
+The next tree is fit to those pseudo-residuals:
+
+```math
+f_m
+=
+\arg\min_f
+\sum_{i=1}^{N}
+(r_{i,m} - f(x_i))^2.
+```
+
+Plain English: each tree is trained to predict the mistakes of the ensemble so far.
+
+The model update is:
+
+```math
+F_m(x) = F_{m-1}(x) + \eta f_m(x).
+```
+
+Plain English: the new tree is added with a small step size so the ensemble learns gradually instead of overreacting to one batch of residuals.
+
+### Multi-Level Order-Flow Impact Model
+
+The order-book feature builder computes imbalance across multiple depths. A classical microstructure regression for future mid-price movement is:
+
+```math
+\Delta m_{t,h}
+=
+\beta_0
++ \sum_{d \in D} \beta_d I_t^{(d)}
++ \beta_s s_t^{rel}
++ \beta_{\mu}(\mu_t - m_t)
++ \epsilon_{t,h}.
+```
+
+Plain English: future mid-price movement is modeled as a weighted combination of depth imbalance, relative spread, and the gap between microprice and mid price.
+
+The multi-depth imbalance vector is:
+
+```math
+z_t =
+\left[
+    I_t^{(1)},
+    I_t^{(5)},
+    I_t^{(10)},
+    I_t^{(20)}
+\right]^\top.
+```
+
+Plain English: instead of trusting only the best bid and ask, the model sees pressure at several order-book depths.
+
+A nonlinear signal head then estimates:
+
+```math
+\hat{r}_{t,h} = f_{\theta}(z_t, s_t^{rel}, \mu_t, m_t, \ldots).
+```
+
+Plain English: the current histogram boosting model is a practical local approximation of this kind of nonlinear microstructure response function.
+
+### Triple-Barrier Labeling for Trading Events
+
+The config includes triple-barrier parameters for future event labeling. Given entry time `t`, profit-take level `u`, stop-loss level `l`, and maximum horizon `H`, define the first stopping time:
+
+```math
+B_t =
+\left\{
+    k \in \{1,\ldots,H\}
+    :
+    r_{t,k} \ge u
+    \ \vee \
+    r_{t,k} \le l
+\right\}.
+```
+
+Plain English: `B_t` is the set of future steps where either the profit target or stop loss is reached.
+
+The first barrier-touch time is:
+
+```math
+\tau_t = \min B_t.
+```
+
+Plain English: the event ends at the first future step where one of the barriers is touched. If no barrier is touched, the vertical time limit `H` closes the event.
+
+The corresponding label is:
+
+```math
+y_t^{TB}
+=
+\mathbf{1}\{r_{t,\tau_t} \ge u\}
+-
+\mathbf{1}\{r_{t,\tau_t} \le l\}.
+```
+
+Plain English: the label says whether the trade would have hit profit first, stop loss first, or neither barrier before expiry.
+
+This is more trading-aware than a raw next-return label because it encodes asymmetric exits and finite holding periods.
+
+### Purged and Embargoed Time-Series Validation
+
+Financial samples overlap in time. If a training label uses future information that overlaps with the validation window, the score can be contaminated. Let the validation interval be:
+
+```math
+V_j = [a_j, b_j].
+```
+
+Plain English: this is one contiguous validation block in time.
+
+If each training event has an information interval `[t_i, t_i + H_i]`, the purged training set is:
+
+```math
+T_j^{purged}
+=
+\left\{
+    i :
+    [t_i, t_i + H_i] \cap [a_j, b_j] = \emptyset
+\right\}.
+```
+
+Plain English: any training example whose label looks into the validation period is removed.
+
+With an embargo length `e`, the final training set is:
+
+```math
+T_j^{final}
+=
+\left\{
+    i \in T_j^{purged}
+    :
+    t_i < a_j
+    \ \vee \
+    t_i > b_j + e
+\right\}.
+```
+
+Plain English: the embargo also removes samples immediately after validation, reducing leakage from slow-moving market states.
+
+The current benchmark uses time-ordered validation; purging and embargoing are the rigorous next step for overlapping horizon labels.
+
+### Probabilistic Forecasting and Calibration
+
+A deterministic model predicts one value. A probabilistic model estimates an entire conditional distribution:
+
+```math
+p_{\theta}(y \mid x)
+\qquad
+Q_{\theta}(\tau \mid x),
+\qquad
+\tau \in (0,1).
+```
+
+Plain English: instead of saying only "expected return is 0.02%", the model can estimate downside, upside, and uncertainty bands.
+
+For quantile forecasting, the pinball loss is:
+
+```math
+\rho_{\tau}(u)
+=
+u(\tau - \mathbf{1}\{u < 0\}),
+\qquad
+u = y - Q_{\theta}(\tau \mid x).
+```
+
+Plain English: the loss is asymmetric. Underpredicting and overpredicting are penalized differently depending on which quantile is being estimated.
+
+For an interval `[L_{\theta}(x), U_{\theta}(x)]`, empirical coverage is:
+
+```math
+\widehat{C}
+=
+\frac{1}{N}
+\sum_{i=1}^{N}
+\mathbf{1}
+\left\{
+    L_{\theta}(x_i) \le y_i \le U_{\theta}(x_i)
+\right\}.
+```
+
+Plain English: coverage measures how often the true future return lands inside the model's stated uncertainty band.
+
+### Retrieval-Augmented LLM Signal Reasoning
+
+The LLM layer is not a trading oracle. It is a conditional reasoning model over market context `x_t`, query `q`, and retrieved research chunks `c`.
+
+The retrieval score can be written as:
+
+```math
+s(q,c)
+=
+\frac{\phi(q)^\top \phi(c)}
+      {\left\|\phi(q)\right\|_2 \left\|\phi(c)\right\|_2}.
+```
+
+Plain English: the retriever ranks paper chunks by semantic similarity between the query and the chunk.
+
+A retrieval-augmented signal distribution can be conceptualized as:
+
+```math
+\Pr(y_{t,h} \mid x_t, q, D)
+=
+\sum_{c \in D}
+\Pr(y_{t,h} \mid x_t, c)
+\Pr(c \mid q, D).
+```
+
+Plain English: the final reasoning depends both on the market state and on which research chunks are considered relevant.
+
+If the local LLM is fine-tuned on instruction data, the next-token training objective is:
+
+```math
+\hat{\theta}
+=
+\arg\max_{\theta}
+\sum_{n=1}^{N}
+\sum_{t=1}^{T_n}
+\log
+\Pr_{\theta}
+\left(
+    a_{n,t}
+    \mid
+    a_{n,<t},
+    p_n
+\right).
+```
+
+Plain English: the model learns to generate answer tokens from the prompt and previous answer tokens. In this repo, that objective is relevant to future local fine-tuning of research explanations, not to direct trade execution.
+
+### Risk-Constrained Paper-Trading Objective
+
+A prediction model is not a strategy until it is translated into positions and risk constraints. A research-grade paper-trading objective can be written as:
+
+```math
+\max_{\pi}
+\left[
+    \mathbb{E}[R_t^{\pi}]
+    -
+    \lambda_{\sigma}\mathrm{Var}(R_t^{\pi})
+    -
+    \lambda_{dd}\mathrm{MDD}(\pi)
+    -
+    \lambda_{turn}\mathbb{E}[|q_t - q_{t-1}|]
+\right].
+```
+
+Plain English: a strategy is rewarded for return, but penalized for volatility, drawdown, and excessive turnover.
+
+For a small-return approximation, a volatility-scaled Kelly-style fraction is:
+
+```math
+f_t^{Kelly}
+\approx
+\frac{\hat{\mu}_{t,h}}
+     {\hat{\sigma}_{t,h}^{2} + \epsilon}.
+```
+
+Plain English: the position should grow with expected return and shrink sharply when uncertainty rises.
+
+The production-safe position is the clipped and risk-scaled version:
+
+```math
+q_t
+=
+\mathrm{clip}
+\left(
+    k f_t^{Kelly},
+    -q_{\max},
+    q_{\max}
+\right).
+```
+
+Plain English: even if the model is confident, the final position remains bounded by explicit risk limits.
 
 ## Training Process
 
