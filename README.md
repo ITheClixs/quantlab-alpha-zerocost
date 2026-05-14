@@ -761,17 +761,12 @@ If the local LLM is fine-tuned on instruction data, the next-token training obje
 \arg\max_{\theta}
 \sum_{n=1}^{N}
 \sum_{t=1}^{T_n}
-\log
-\Pr_{\theta}
-\left(
-    a_{n,t}
-    \mid
-    a_{n,<t},
-    p_n
-\right).
+\log P_{\theta}(a_{n,t} \mid h_{n,t}).
 ```
 
-Plain English: the model learns to generate answer tokens from the prompt and previous answer tokens. In this repo, that objective is relevant to future local fine-tuning of research explanations, not to direct trade execution.
+Here, `h_{n,t}` is the prompt plus all answer tokens before step `t` in example `n`.
+
+Plain English: the model learns to generate the next answer token from the prompt and the answer it has already written. In this repo, that objective is relevant to future local fine-tuning of research explanations, not to direct trade execution.
 
 ### Risk-Constrained Paper-Trading Objective
 
