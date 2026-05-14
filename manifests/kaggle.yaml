@@ -108,3 +108,220 @@ items:
     license_hint: cc0
     expected_max_gb: 0.5
     purpose: "NYSE fundamentals + prices for fundamental factors."
+
+  # ===== Competition data mirrors (since the original competitions are rule-gated) =====
+
+  - id: bariscan07/g-research-crypto-forecasting-dataset
+    resource_type: dataset
+    group: crypto_forecasting_mirror
+    priority: 300
+    topics: [crypto, time_series]
+    license_hint: unknown
+    expected_max_gb: 1.5
+    purpose: "Public mirror of the G-Research Crypto Forecasting training data (gated competition)."
+
+  - id: chienhsianghung/g-research-crypto-forecasting
+    resource_type: dataset
+    group: crypto_forecasting_mirror
+    priority: 310
+    topics: [crypto, time_series]
+    license_hint: unknown
+    expected_max_gb: 0.2
+    purpose: "Compact mirror of G-Research crypto data."
+
+  - id: saurabhshahane/jane-street-preprocessed-train
+    resource_type: dataset
+    group: jane_street_mirror
+    priority: 320
+    topics: [equity, microstructure]
+    license_hint: unknown
+    expected_max_gb: 3.0
+    purpose: "Preprocessed Jane Street Market Prediction training data (gated competition mirror)."
+
+  - id: christoffer/synthetic-jane-street-dataset
+    resource_type: dataset
+    group: jane_street_synth
+    priority: 330
+    topics: [equity, microstructure]
+    license_hint: unknown
+    expected_max_gb: 3.0
+    purpose: "Synthetic Jane Street style dataset for offline modeling."
+
+  - id: ravi20076/janestreetpublicv1
+    resource_type: dataset
+    group: jane_street_public_v1
+    priority: 340
+    topics: [equity, microstructure]
+    license_hint: unknown
+    expected_max_gb: 0.2
+    purpose: "Public Jane Street V1 feature set."
+
+  - id: louise2001/janestreetimputeddata
+    resource_type: dataset
+    group: jane_street_imputed
+    priority: 350
+    topics: [equity, microstructure]
+    license_hint: unknown
+    expected_max_gb: 0.5
+    purpose: "Imputed Jane Street data for missing-value experiments."
+
+  # ===== Optiver preprocessed competition data + trained baseline models =====
+
+  - id: ravi20076/optiver-memoryreduceddatasets
+    resource_type: dataset
+    group: optiver_preprocessed
+    priority: 400
+    topics: [microstructure, options]
+    license_hint: unknown
+    expected_max_gb: 2.0
+    purpose: "Memory-reduced Optiver Realized Volatility training tensors. Top-voted (93) Kaggle dataset."
+
+  - id: ravi20076/optiverbaselinemodels
+    resource_type: dataset
+    group: optiver_baseline_models
+    priority: 410
+    topics: [microstructure, options]
+    license_hint: unknown
+    expected_max_gb: 0.5
+    purpose: "Top-voted (66) trained LightGBM/XGB baseline models from the Optiver realized vol comp."
+
+  - id: aspillai/arv-lgb-model-fold2
+    resource_type: dataset
+    group: optiver_baseline_models
+    priority: 420
+    topics: [microstructure, options]
+    license_hint: unknown
+    expected_max_gb: 0.4
+    purpose: "Optiver-ARV LightGBM trained fold-2 model."
+
+  - id: chumajin/optiverlgbbase
+    resource_type: dataset
+    group: optiver_baseline_models
+    priority: 430
+    topics: [microstructure, options]
+    license_hint: unknown
+    expected_max_gb: 0.4
+    purpose: "Optiver LightGBM base model + features."
+
+  # ===== Numerai competition-style stock data =====
+
+  - id: code1110/yfinance-stock-price-data-for-numerai-signals
+    resource_type: dataset
+    group: numerai_signals
+    priority: 500
+    topics: [equity, time_series]
+    license_hint: unknown
+    expected_max_gb: 0.6
+    purpose: "Yfinance OHLCV aligned to Numerai Signals universe; 13.9k downloads."
+
+  - id: code1110/numerai-train-validation-with-kazutsugi-nomi
+    resource_type: dataset
+    group: numerai_classic
+    priority: 510
+    topics: [equity, time_series]
+    license_hint: unknown
+    expected_max_gb: 0.15
+    purpose: "Numerai classic train/validation slices for tabular signal modeling."
+
+  - id: numerai/encrypted-stock-market-data-from-numerai
+    resource_type: dataset
+    group: numerai_classic
+    priority: 520
+    topics: [equity]
+    license_hint: unknown
+    expected_max_gb: 0.05
+    purpose: "Original Numerai encrypted stock data."
+
+  # ===== High-frequency limit order book =====
+
+  - id: martinsn/high-frequency-crypto-limit-order-book-data
+    resource_type: dataset
+    group: hft_lob
+    priority: 600
+    topics: [microstructure, crypto, orderflow]
+    license_hint: unknown
+    expected_max_gb: 1.2
+    purpose: "Top-voted high-frequency crypto LOB dataset; widely used in microstructure research."
+
+  - id: siavashraz/bitcoin-perpetualbtcusdtp-limit-order-book-data
+    resource_type: dataset
+    group: hft_lob
+    priority: 610
+    topics: [microstructure, crypto, orderflow]
+    license_hint: unknown
+    expected_max_gb: 0.25
+    purpose: "Bitcoin perpetual LOB snapshots for OFI / microprice features."
+
+  - id: jsadighian/cryptorl
+    resource_type: dataset
+    group: rl_trading_data
+    priority: 620
+    topics: [crypto, llm_agent]
+    license_hint: unknown
+    expected_max_gb: 1.0
+    purpose: "Crypto RL trading environment data + policy targets."
+
+  - id: westland/bitcoin-mkt-liquidity-informativeness
+    resource_type: dataset
+    group: btc_liquidity_informativeness
+    priority: 630
+    topics: [microstructure, crypto]
+    license_hint: unknown
+    expected_max_gb: 3.0
+    purpose: "Bitcoin trade informativeness + liquidity panel."
+
+  - id: qkxuuuu/cryptolob-2025
+    resource_type: dataset
+    group: hft_lob_modern
+    priority: 640
+    topics: [microstructure, crypto, orderflow]
+    license_hint: unknown
+    expected_max_gb: 2.5
+    purpose: "CryptoLOB-2025 modern LOB dataset for deep learning research."
+
+  # ===== Big futures + commodity feeds =====
+
+  - id: siavashraz/binance-futures-market-data-1-minute-frequency
+    resource_type: dataset
+    group: crypto_futures_minute
+    priority: 700
+    topics: [crypto, time_series]
+    license_hint: unknown
+    expected_max_gb: 5.0
+    purpose: "Binance futures 1-min OHLCV multi-symbol panel."
+
+  - id: tgtanalytics/nq-futures-1min-bar-2022-2025
+    resource_type: dataset
+    group: nq_futures
+    priority: 710
+    topics: [equity, time_series]
+    license_hint: unknown
+    expected_max_gb: 0.05
+    purpose: "NASDAQ 100 futures 1-min bars (recent)."
+
+  - id: padschino/bitcoin-prices-2018-btcusdt
+    resource_type: dataset
+    group: btc_alt_ohlcv
+    priority: 720
+    topics: [crypto, time_series]
+    license_hint: unknown
+    expected_max_gb: 0.05
+    purpose: "BTC futures alternate OHLCV for cross-validation."
+
+  - id: camnugent/sandp500
+    resource_type: dataset
+    group: sp500_classic
+    priority: 730
+    topics: [equity]
+    license_hint: unknown
+    expected_max_gb: 0.05
+    purpose: "Classic S&P 500 individual stock historical prices dataset (106k+ downloads)."
+
+  - id: aaditya555/nifty-50-minute-data
+    resource_type: dataset
+    group: nifty50_minute
+    priority: 740
+    topics: [equity, time_series]
+    license_hint: unknown
+    expected_max_gb: 1.0
+    purpose: "Indian Nifty-50 minute-level price data for non-US market generalization."

@@ -1,8 +1,8 @@
 artifact_budget:
-  max_total_gb: 150
+  max_total_gb: 180
   reserve_gb_for_processed_outputs: 0
   default_sort: size
-  hard_ceiling_gb: 165
+  hard_ceiling_gb: 200
   counted_paths:
     - data/raw/huggingface
     - data/raw/kaggle
