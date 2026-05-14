@@ -62,10 +62,20 @@ def main() -> int:
     console.print(f"Wrote {args.report}")
     if args.dry_run:
         return 0
+    results: list[dict] = []
     for row in plan:
+        record = row.as_dict()
         if row.decision == "download":
             console.print(f"[bold]Downloading[/bold] {row.item.id} -> {row.local_dir}")
-            run_kaggle_download(row, unzip=args.unzip)
+            outcome = run_kaggle_download(row, unzip=args.unzip)
+            record.update(outcome)
+            if outcome.get("status") == "skip_rules_not_accepted":
+                console.print(f"[yellow]Skipped {row.item.id}: rules must be accepted at https://www.kaggle.com/competitions/{row.item.id}/rules[/yellow]")
+            elif outcome.get("status") == "error":
+                console.print(f"[red]Error on {row.item.id}: {outcome.get('stderr','')[:200]}[/red]")
+        results.append(record)
+    payload["items"] = results
+    write_json(args.report, payload)
     return 0
 
 

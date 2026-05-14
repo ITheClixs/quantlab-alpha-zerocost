@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import subprocess
+import zipfile
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -71,16 +72,43 @@ def build_kaggle_plan(items: list[KaggleItem], raw_root: str | Path, budget: Art
 def kaggle_download_command(decision: KaggleDownloadDecision, *, unzip: bool = False) -> list[str]:
     item = decision.item
     if item.resource_type == "competition":
-        cmd = ["kaggle", "competitions", "download", "-c", item.id, "-p", str(decision.local_dir)]
-    elif item.resource_type == "dataset":
+        # kaggle CLI 2.x does not support --unzip for `competitions download`; unzip is handled post-run.
+        return ["kaggle", "competitions", "download", "-c", item.id, "-p", str(decision.local_dir)]
+    if item.resource_type == "dataset":
         cmd = ["kaggle", "datasets", "download", "-d", item.id, "-p", str(decision.local_dir)]
-    else:
-        raise ValueError(f"Unsupported Kaggle resource_type: {item.resource_type}")
-    if unzip:
-        cmd.append("--unzip")
-    return cmd
+        if unzip:
+            cmd.append("--unzip")
+        return cmd
+    raise ValueError(f"Unsupported Kaggle resource_type: {item.resource_type}")
 
 
-def run_kaggle_download(decision: KaggleDownloadDecision, *, unzip: bool = False) -> None:
+def _unzip_in_place(directory: Path) -> None:
+    for zip_path in sorted(directory.glob("*.zip")):
+        try:
+            with zipfile.ZipFile(zip_path, "r") as archive:
+                archive.extractall(directory)
+            zip_path.unlink()
+        except zipfile.BadZipFile:
+            continue
+
+
+def run_kaggle_download(decision: KaggleDownloadDecision, *, unzip: bool = False) -> dict[str, Any]:
     decision.local_dir.mkdir(parents=True, exist_ok=True)
-    subprocess.run(kaggle_download_command(decision, unzip=unzip), check=True)
+    cmd = kaggle_download_command(decision, unzip=unzip)
+    proc = subprocess.run(cmd, capture_output=True, text=True)
+    result: dict[str, Any] = {
+        "stdout": proc.stdout.strip(),
+        "stderr": proc.stderr.strip(),
+        "returncode": proc.returncode,
+    }
+    if proc.returncode != 0:
+        combined = (proc.stderr + " " + proc.stdout).lower()
+        if "403" in combined or "forbidden" in combined or "you must" in combined or "have to accept" in combined:
+            result["status"] = "skip_rules_not_accepted"
+        else:
+            result["status"] = "error"
+        return result
+    if unzip and decision.item.resource_type == "competition":
+        _unzip_in_place(decision.local_dir)
+    result["status"] = "downloaded"
+    return result

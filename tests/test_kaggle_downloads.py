@@ -44,7 +44,8 @@ def test_kaggle_download_command_for_competition(tmp_path: Path) -> None:
     cmd = kaggle_download_command(plan[0], unzip=True)
     assert cmd[:4] == ["kaggle", "competitions", "download", "-c"]
     assert item.id in cmd
-    assert "--unzip" in cmd
+    # kaggle CLI 2.x does not accept --unzip for competitions; unzip happens post-run.
+    assert "--unzip" not in cmd
 
 
 def test_kaggle_download_command_for_dataset(tmp_path: Path) -> None:
