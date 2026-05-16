@@ -1,0 +1,64 @@
+tiers:
+  tier1:
+    enabled: true
+    base_model_id: Qwen/Qwen2.5-0.5B-Instruct
+    base_model_dir: models/huggingface/Qwen__Qwen2.5-0.5B-Instruct
+    adapter_dir: models/trained/governor_lora_qwen05b/latest
+    max_new_tokens: 256
+    temperature: 0.0
+  tier2:
+    enabled: true
+    gguf_path: models/huggingface/bartowski__Mistral-Small-Instruct-2409-GGUF/Mistral-Small-Instruct-2409-Q4_K_M.gguf
+    n_ctx: 4096
+    n_gpu_layers: -1
+    max_new_tokens: 384
+    temperature: 0.0
+    triggered_when_tier1_passes_above_confidence: 0.6
+  tier3:
+    enabled: true
+    gguf_path: models/huggingface/bartowski__Yi-1.5-34B-Chat-GGUF/Yi-1.5-34B-Chat-Q4_K_M.gguf
+    n_ctx: 4096
+    n_gpu_layers: -1
+    max_new_tokens: 512
+    temperature: 0.0
+    triggered_when_trade_size_pct_above: 1.0
+    async_workers: 1
+
+retrieval:
+  bm25_top_n: 20
+  dense_top_n: 20
+  rerank_to_k: 5
+  reranker_model_id: cross-encoder/ms-marco-MiniLM-L-6-v2
+  reranker_model_dir: models/huggingface/cross-encoder__ms-marco-MiniLM-L-6-v2
+  embedding_model_id: FinLang/finance-embeddings-investopedia
+  embedding_model_dir: models/huggingface/FinLang__finance-embeddings-investopedia
+  index_dir: models/governor
+
+corpus:
+  parquet_dir: data/processed/research/parquet
+
+transport:
+  primary_verdicts_dir: experiments/s2_verdicts
+  tier3_verdicts_dir: experiments/s2_verdicts_tier3
+  audit_log_dir: logs/audit/governor
+  rotation: daily
+  chmod_after_close: true
+
+stance:
+  tier3_stance_modifier_pct: 0.20
+
+lora_training:
+  base_model_dir: models/huggingface/Qwen__Qwen2.5-0.5B-Instruct
+  output_root: models/trained/governor_lora_qwen05b
+  rank: 16
+  alpha: 32
+  target_modules: [q_proj, k_proj, v_proj, o_proj]
+  batch_size: 4
+  gradient_accumulation_steps: 4
+  max_seq_length: 1024
+  max_epochs: 5
+  learning_rate: 2e-4
+  warmup_steps: 100
+  held_out_fraction: 0.10
+  random_seed: 42
+  max_wall_clock_hours: 8
