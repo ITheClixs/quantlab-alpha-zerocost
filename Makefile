@@ -1,10 +1,13 @@
 PY := PYTHONPATH=src uv run
 EXTRACT := scripts/alpha_extract_meta_features.py
 TRAIN := scripts/alpha_train_s1.py
+TRAIN_STREAMING := scripts/alpha_train_s1_streaming.py
+TRAIN_STREAMING_CONFIG ?= configs/alpha_5m.yaml
+TRAIN_STREAMING_ROWS ?= 5000000
 OPTUNA := scripts/alpha_optuna_search.py
 OPTUNA_ARGS ?= --n-trials 200
 
-.PHONY: test lint type extract train optuna full-retrain-s1 clean-experiments
+.PHONY: test lint type extract train train-streaming optuna full-retrain-s1 clean-experiments
 
 test:
 	$(PY) pytest -q
@@ -20,6 +23,9 @@ extract:
 
 train:
 	$(PY) python $(TRAIN)
+
+train-streaming:
+	$(PY) python $(TRAIN_STREAMING) --config $(TRAIN_STREAMING_CONFIG) --max-rows $(TRAIN_STREAMING_ROWS)
 
 optuna:
 	$(PY) python $(OPTUNA) $(OPTUNA_ARGS)

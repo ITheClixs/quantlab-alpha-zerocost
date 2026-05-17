@@ -1,0 +1,67 @@
+data:
+  jane_street_root: data/raw/huggingface/TnnnT0326__Jane_Street_Competition
+  preprocessed_alt_root: data/raw/kaggle/datasets/saurabhshahane__jane-street-preprocessed-train
+  synthetic_root: data/raw/kaggle/datasets/christoffer__synthetic-jane-street-dataset
+  permanent_holdout_fraction: 0.20
+  target_column: responder_6
+  weight_column: weight
+  group_column: date_id
+  max_rows: 5000000
+
+cv:
+  n_folds: 3
+  purge_days: 5
+  embargo_days: 5
+  random_seed: 42
+
+features:
+  lag_windows: [1, 5, 20]
+  rolling_windows: [5, 20]
+  cross_sectional_ranks: false
+  interaction_pairs_top_n: 0
+  include_noise_feature: true
+
+models:
+  ridge:
+    alpha_grid: [0.1, 1.0, 10.0]
+  lightgbm:
+    num_leaves: 63
+    max_depth: -1
+    learning_rate: 0.05
+    n_estimators: 800
+    early_stopping_rounds: 50
+    feature_fraction: 0.85
+    bagging_fraction: 0.8
+  xgboost:
+    max_depth: 6
+    learning_rate: 0.05
+    n_estimators: 800
+    early_stopping_rounds: 50
+    tree_method: hist
+  catboost:
+    depth: 8
+    learning_rate: 0.05
+    n_estimators: 800
+    early_stopping_rounds: 50
+  mlp:
+    hidden_dims: [256, 128]
+    dropout: 0.3
+    learning_rate: 0.001
+    batch_size: 4096
+    max_epochs: 12
+    patience: 3
+    mixed_precision: true
+
+stacking:
+  method: linear
+  fit_on: oof_predictions
+
+training_budget:
+  profile: streaming_5m
+  max_rows_recommended: 5000000
+  target_wall_clock_hours: 8
+
+success_gate:
+  min_holdout_r2: 0.005
+  max_fold_std_r2: 0.01
+  min_ridge_baseline_improvement_pct: 30
