@@ -55,3 +55,21 @@ governor-up:
 
 governor-down:
 	@pkill -f "python.*s2_govern.py" || true
+
+S3_RECORD := scripts/s3_record.py
+BACKTEST_RUN := scripts/backtest_run.py
+BACKTEST_CONFIG ?= configs/backtests/smoke.yaml
+
+.PHONY: s3-record s3-parity backtest backtest-smoke
+
+s3-record:
+	$(PY) python $(S3_RECORD) --config configs/feeds.yaml
+
+s3-parity:
+	$(PY) pytest tests/integration/test_record_replay_parity.py -v -m s3_integration
+
+backtest:
+	$(PY) python $(BACKTEST_RUN) --config $(BACKTEST_CONFIG)
+
+backtest-smoke:
+	$(PY) python $(BACKTEST_RUN) --config configs/backtests/smoke.yaml
