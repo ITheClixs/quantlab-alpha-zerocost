@@ -70,7 +70,7 @@ def govern_signal(
         return t1
 
     # --- Confidence gate: skip Tier 2 for low-confidence signals ---
-    if abs(signal.confidence) < cfg.tier2_required_when_tier1_passes_above_confidence:
+    if abs(signal.confidence) < cfg.tier2_required_when_tier1_passes_above_confidence or getattr(runtimes, "tier2", None) is None:
         # Return Tier 1 verdict, forcing decision to pass_ (Tier 1 veto was already
         # handled above; insufficient_evidence here means "no RAG citations yet" which
         # is expected for the fast-path gate — not a blocking condition).
@@ -85,7 +85,7 @@ def govern_signal(
         return t2
 
     # --- Tier 3: deep async, only for large trades ---
-    if signal.trade_size_pct > cfg.tier3_required_when_trade_size_pct_above:
+    if signal.trade_size_pct > cfg.tier3_required_when_trade_size_pct_above and getattr(runtimes, "tier3", None) is not None:
         runtimes.tier3.schedule_async(signal, chunks)
 
     return t2

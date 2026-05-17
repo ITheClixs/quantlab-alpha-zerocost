@@ -26,6 +26,14 @@ def test_train_holdout_auc_high_for_shifted_distributions() -> None:
     assert auc > 0.9
 
 
+def test_train_holdout_auc_samples_large_inputs() -> None:
+    rng = np.random.default_rng(0)
+    train = rng.normal(loc=0.0, size=(20_000, 2))
+    holdout = rng.normal(loc=4.0, size=(20_000, 2))
+    auc = train_holdout_classifier_auc(train, holdout, max_rows_per_split=500)
+    assert auc > 0.9
+
+
 def test_adversarial_drop_features_removes_shifted_columns() -> None:
     rng = np.random.default_rng(0)
     train = pl.DataFrame({"good": rng.normal(size=200), "shifted": rng.normal(loc=0.0, size=200)})
@@ -33,6 +41,13 @@ def test_adversarial_drop_features_removes_shifted_columns() -> None:
     kept = adversarial_drop_features(train, holdout, candidate_cols=["good", "shifted"], auc_threshold=0.6)
     assert "good" in kept
     assert "shifted" not in kept
+
+
+def test_adversarial_drop_features_keeps_sparse_null_columns() -> None:
+    train = pl.DataFrame({"sparse": [None, None, 1.0]})
+    holdout = pl.DataFrame({"sparse": [None, None, None]})
+    kept = adversarial_drop_features(train, holdout, candidate_cols=["sparse"], auc_threshold=0.6)
+    assert kept == ["sparse"]
 
 
 def test_drop_below_noise_floor() -> None:

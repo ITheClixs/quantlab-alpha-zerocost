@@ -84,20 +84,24 @@ def main() -> int:
         adapter_dir=Path(cfg["tiers"]["tier1"]["adapter_dir"]) if Path(cfg["tiers"]["tier1"]["adapter_dir"]).exists() else None,
         max_new_tokens=int(cfg["tiers"]["tier1"]["max_new_tokens"]),
     )
-    tier2 = Tier2Runtime(
-        gguf_path=Path(cfg["tiers"]["tier2"]["gguf_path"]),
-        n_ctx=int(cfg["tiers"]["tier2"]["n_ctx"]),
-        n_gpu_layers=int(cfg["tiers"]["tier2"]["n_gpu_layers"]),
-        max_new_tokens=int(cfg["tiers"]["tier2"]["max_new_tokens"]),
-    )
-    tier3 = Tier3Runtime(
-        gguf_path=Path(cfg["tiers"]["tier3"]["gguf_path"]),
-        output_path=_today_path(Path(cfg["transport"]["tier3_verdicts_dir"])),
-        n_ctx=int(cfg["tiers"]["tier3"]["n_ctx"]),
-        n_gpu_layers=int(cfg["tiers"]["tier3"]["n_gpu_layers"]),
-        max_new_tokens=int(cfg["tiers"]["tier3"]["max_new_tokens"]),
-    )
-    tier3.start()
+    tier2 = None
+    if bool(cfg["tiers"]["tier2"].get("enabled", True)):
+        tier2 = Tier2Runtime(
+            gguf_path=Path(cfg["tiers"]["tier2"]["gguf_path"]),
+            n_ctx=int(cfg["tiers"]["tier2"]["n_ctx"]),
+            n_gpu_layers=int(cfg["tiers"]["tier2"]["n_gpu_layers"]),
+            max_new_tokens=int(cfg["tiers"]["tier2"]["max_new_tokens"]),
+        )
+    tier3 = None
+    if bool(cfg["tiers"]["tier3"].get("enabled", True)):
+        tier3 = Tier3Runtime(
+            gguf_path=Path(cfg["tiers"]["tier3"]["gguf_path"]),
+            output_path=_today_path(Path(cfg["transport"]["tier3_verdicts_dir"])),
+            n_ctx=int(cfg["tiers"]["tier3"]["n_ctx"]),
+            n_gpu_layers=int(cfg["tiers"]["tier3"]["n_gpu_layers"]),
+            max_new_tokens=int(cfg["tiers"]["tier3"]["max_new_tokens"]),
+        )
+        tier3.start()
 
     class _Runtimes:
         pass
@@ -161,7 +165,8 @@ def main() -> int:
             break
         time.sleep(2.0)
 
-    tier3.stop()
+    if tier3 is not None:
+        tier3.stop()
     primary_writer.close_and_lock()
     return 0
 

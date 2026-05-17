@@ -7,12 +7,28 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import roc_auc_score
 from sklearn.model_selection import StratifiedKFold
 
+_ADVERSARIAL_MAX_ROWS_PER_SPLIT = 10_000
 
-def train_holdout_classifier_auc(train: NDArray[np.float64], holdout: NDArray[np.float64]) -> float:
+
+def _sample_rows(values: NDArray[np.float64], max_rows: int, seed: int) -> NDArray[np.float64]:
+    if values.shape[0] <= max_rows:
+        return values
+    rng = np.random.default_rng(seed)
+    idx = rng.choice(values.shape[0], size=max_rows, replace=False)
+    return values[idx]
+
+
+def train_holdout_classifier_auc(
+    train: NDArray[np.float64],
+    holdout: NDArray[np.float64],
+    max_rows_per_split: int = _ADVERSARIAL_MAX_ROWS_PER_SPLIT,
+) -> float:
     if train.ndim == 1:
         train = train.reshape(-1, 1)
     if holdout.ndim == 1:
         holdout = holdout.reshape(-1, 1)
+    train = _sample_rows(train, max_rows_per_split, seed=42)
+    holdout = _sample_rows(holdout, max_rows_per_split, seed=43)
     x = np.vstack([train, holdout])
     y = np.concatenate([np.zeros(train.shape[0]), np.ones(holdout.shape[0])])
     skf = StratifiedKFold(n_splits=3, shuffle=True, random_state=42)
@@ -30,10 +46,12 @@ def adversarial_drop_features(
 ) -> list[str]:
     kept: list[str] = []
     for col in candidate_cols:
-        auc = train_holdout_classifier_auc(
-            train_df[col].drop_nulls().to_numpy(),
-            holdout_df[col].drop_nulls().to_numpy(),
-        )
+        train_values = train_df[col].drop_nulls().to_numpy()
+        holdout_values = holdout_df[col].drop_nulls().to_numpy()
+        if min(train_values.shape[0], holdout_values.shape[0]) < 3:
+            kept.append(col)
+            continue
+        auc = train_holdout_classifier_auc(train_values, holdout_values)
         if auc < auc_threshold:
             kept.append(col)
     return kept

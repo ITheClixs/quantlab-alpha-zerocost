@@ -68,8 +68,8 @@ def main() -> int:
             num_leaves=trial.suggest_int("num_leaves", 15, 255),
             max_depth=trial.suggest_int("max_depth", -1, 12),
             learning_rate=trial.suggest_float("learning_rate", 1e-3, 1e-1, log=True),
-            n_estimators=2000,
-            early_stopping_rounds=80,
+            n_estimators=int(cfg["models"]["lightgbm"]["n_estimators"]),
+            early_stopping_rounds=int(cfg["models"]["lightgbm"]["early_stopping_rounds"]),
             feature_fraction=trial.suggest_float("feature_fraction", 0.5, 1.0),
             bagging_fraction=trial.suggest_float("bagging_fraction", 0.5, 1.0),
         )

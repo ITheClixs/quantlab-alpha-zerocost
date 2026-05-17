@@ -109,25 +109,30 @@ def main() -> int:
     for fold_i, (tr_idx, te_idx) in enumerate(splitter.split(train_feats)):
         console.print(f"Fold {fold_i + 1}/{cfg['cv']['n_folds']}: train={tr_idx.size}, test={te_idx.size}")
 
+        console.print(f"  fold {fold_i + 1}: ridge")
         rmod = RidgeAlphaModel(RidgeConfig(alpha=1.0))
         rmod.fit(x[tr_idx], y[tr_idx], w[tr_idx])
         oof_ridge[te_idx] = rmod.predict(x[te_idx])
 
+        console.print(f"  fold {fold_i + 1}: lightgbm")
         lcfg = cfg["models"]["lightgbm"]
         lmod = LightGBMAlphaModel(LightGBMConfig(**{k: lcfg[k] for k in ("num_leaves", "max_depth", "learning_rate", "n_estimators", "early_stopping_rounds", "feature_fraction", "bagging_fraction")}))
         lmod.fit(x[tr_idx], y[tr_idx], w[tr_idx], x[te_idx], y[te_idx], w[te_idx])
         oof_lgb[te_idx] = lmod.predict(x[te_idx])
 
+        console.print(f"  fold {fold_i + 1}: xgboost")
         xcfg = cfg["models"]["xgboost"]
         xmod = XGBoostAlphaModel(XGBoostConfig(**{k: xcfg[k] for k in ("max_depth", "learning_rate", "n_estimators", "early_stopping_rounds", "tree_method")}))
         xmod.fit(x[tr_idx], y[tr_idx], w[tr_idx], x[te_idx], y[te_idx], w[te_idx])
         oof_xgb[te_idx] = xmod.predict(x[te_idx])
 
+        console.print(f"  fold {fold_i + 1}: catboost")
         ccfg = cfg["models"]["catboost"]
         cmod = CatBoostAlphaModel(CatBoostConfig(**{k: ccfg[k] for k in ("depth", "learning_rate", "n_estimators", "early_stopping_rounds")}))
         cmod.fit(x[tr_idx], y[tr_idx], w[tr_idx], x[te_idx], y[te_idx], w[te_idx])
         oof_cat[te_idx] = cmod.predict(x[te_idx])
 
+        console.print(f"  fold {fold_i + 1}: mlp")
         mcfg = cfg["models"]["mlp"]
         mmod = MLPAlphaModel(MLPConfig(
             hidden_dims=mcfg["hidden_dims"],
@@ -149,6 +154,7 @@ def main() -> int:
             "cat_r2": weighted_zero_mean_r2(y[te_idx], oof_cat[te_idx], w[te_idx]),
             "mlp_r2": weighted_zero_mean_r2(y[te_idx], oof_mlp[te_idx], w[te_idx]),
         })
+        console.print(f"  fold {fold_i + 1}: complete")
 
     # Stacking on OOF
     stack_x = np.column_stack([oof_ridge, oof_lgb, oof_xgb, oof_cat, oof_mlp])
@@ -156,6 +162,7 @@ def main() -> int:
     stacker.fit(stack_x, y, w)
 
     # Noise-floor filter using LightGBM importance (from a final LGB fit on full train)
+    console.print("Final LightGBM fit for noise-floor importance")
     final_lgb = LightGBMAlphaModel(LightGBMConfig(**{k: cfg["models"]["lightgbm"][k] for k in ("num_leaves", "max_depth", "learning_rate", "n_estimators", "early_stopping_rounds", "feature_fraction", "bagging_fraction")}))
     final_lgb.fit(x, y, w, x[-1000:], y[-1000:], w[-1000:])
     importance = final_lgb.feature_importance()

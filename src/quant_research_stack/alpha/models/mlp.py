@@ -8,6 +8,8 @@ from numpy.typing import NDArray
 from torch import nn
 from torch.utils.data import DataLoader, TensorDataset
 
+_TORCH_THREADS_CONFIGURED = False
+
 
 @dataclass(frozen=True)
 class MLPConfig:
@@ -45,9 +47,24 @@ def _resolve_device(device: str) -> torch.device:
     return torch.device(device)
 
 
+def _configure_torch_cpu_threads() -> None:
+    global _TORCH_THREADS_CONFIGURED
+    if _TORCH_THREADS_CONFIGURED:
+        return
+    torch.set_num_threads(1)
+    try:
+        torch.set_num_interop_threads(1)
+    except RuntimeError:
+        # PyTorch only permits inter-op thread configuration before parallel work
+        # starts. In that case the intra-op cap above is still the important guard.
+        pass
+    _TORCH_THREADS_CONFIGURED = True
+
+
 class MLPAlphaModel:
     def __init__(self, config: MLPConfig) -> None:
         self.config = config
+        _configure_torch_cpu_threads()
         self._net: _Net | None = None
         self._device = _resolve_device(config.device)
         torch.manual_seed(config.random_state)

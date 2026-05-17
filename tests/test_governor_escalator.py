@@ -93,6 +93,20 @@ def test_low_confidence_does_not_escalate_to_tier2() -> None:
     assert out.decision == Decision.pass_
 
 
+def test_disabled_tier2_returns_tier1_fast_path() -> None:
+    cfg = EscalationConfig()
+
+    @dataclass
+    class _Runtimes:
+        tier1: _StubT1
+        tier2 = None
+        tier3 = None
+
+    corpus = _corpus_with(["paper_pdf:foo:0"])
+    out = govern_signal(_signal(confidence=0.9, trade_size_pct=2.0), cfg, _Runtimes(tier1=_StubT1()), corpus, _retrieval(corpus))
+    assert out.decision == Decision.pass_
+
+
 def test_high_confidence_calls_tier2_and_uses_its_decision() -> None:
     cfg = EscalationConfig()
     runtimes = _StubRuntimes(tier1=_StubT1(next_decision="pass"), tier2=_StubT2(next_decision="veto"), tier3=_StubT3())
@@ -109,3 +123,17 @@ def test_large_trade_schedules_tier3_async() -> None:
     out = govern_signal(_signal(confidence=0.9, trade_size_pct=2.0), cfg, runtimes, corpus, _retrieval(corpus))
     assert out.decision == Decision.pass_
     assert len(runtimes.tier3.scheduled) == 1
+
+
+def test_disabled_tier3_does_not_schedule_large_trade() -> None:
+    cfg = EscalationConfig()
+
+    @dataclass
+    class _Runtimes:
+        tier1: _StubT1
+        tier2: _StubT2
+        tier3 = None
+
+    corpus = _corpus_with(["paper_pdf:foo:0"])
+    out = govern_signal(_signal(confidence=0.9, trade_size_pct=2.0), cfg, _Runtimes(tier1=_StubT1(), tier2=_StubT2()), corpus, _retrieval(corpus))
+    assert out.decision == Decision.pass_

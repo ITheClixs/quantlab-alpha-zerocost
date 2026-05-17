@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 from pathlib import Path
 
@@ -54,10 +55,11 @@ def main() -> int:
         for i, line in enumerate(h):
             if args.limit is not None and i >= args.limit:
                 break
-            rec = pl.from_json(line.strip()).to_dict(as_series=False) if line.strip().startswith("{") else None
-            if rec is None:
+            line = line.strip()
+            if not line:
                 continue
-            rows.append({"id": rec["id"][0], "text": rec["text"][0]})
+            rec = json.loads(line)
+            rows.append({"id": rec["id"], "text": rec["text"]})
     if not rows:
         console.print("[red]No rows in input.[/red]")
         return 2

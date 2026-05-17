@@ -18,6 +18,7 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--config", default="configs/governor.yaml")
     p.add_argument("--dataset-jsonl", default="data/processed/research/lora_governor.jsonl")
     p.add_argument("--base", default=None, help="Override base model id (e.g. Qwen/Qwen2.5-Coder-1.5B for fallback)")
+    p.add_argument("--limit-records", type=int, default=None, help="Limit records for fast local training runs.")
     return p.parse_args()
 
 
@@ -43,7 +44,9 @@ def main() -> int:
     if tok.pad_token is None:
         tok.pad_token = tok.eos_token
 
-    base_model = AutoModelForCausalLM.from_pretrained(base_dir, torch_dtype=torch.bfloat16).to(device)
+    dtype_name = str(lt.get("torch_dtype", "float16" if device == "mps" else "float32"))
+    torch_dtype = getattr(torch, dtype_name)
+    base_model = AutoModelForCausalLM.from_pretrained(base_dir, dtype=torch_dtype).to(device)
     peft_cfg = LoraConfig(
         r=int(lt["rank"]),
         lora_alpha=int(lt["alpha"]),
@@ -54,6 +57,9 @@ def main() -> int:
     model = get_peft_model(base_model, peft_cfg)
 
     ds = load_dataset("json", data_files=args.dataset_jsonl, split="train")
+    limit_records = args.limit_records or lt.get("limit_records")
+    if limit_records is not None:
+        ds = ds.select(range(min(int(limit_records), len(ds))))
     held_out_n = max(1, int(len(ds) * float(lt["held_out_fraction"])))
     eval_ds = ds.select(range(held_out_n))
     train_ds = ds.select(range(held_out_n, len(ds)))
@@ -63,15 +69,17 @@ def main() -> int:
         for m in example["messages"]:
             text += f"<|im_start|>{m['role']}\n{m['content']}\n<|im_end|>\n"
         toks = tok(text, truncation=True, max_length=int(lt["max_seq_length"]), padding="max_length")
-        toks["labels"] = toks["input_ids"]
+        toks["labels"] = [tok_id if tok_id != tok.pad_token_id else -100 for tok_id in toks["input_ids"]]
         return toks
 
     train_tok = train_ds.map(render, remove_columns=train_ds.column_names)
     eval_tok = eval_ds.map(render, remove_columns=eval_ds.column_names)
 
+    max_steps = int(lt.get("max_steps", -1))
     targs = TrainingArguments(
         output_dir=str(run_dir / "checkpoints"),
         num_train_epochs=int(lt["max_epochs"]),
+        max_steps=max_steps,
         per_device_train_batch_size=int(lt["batch_size"]),
         gradient_accumulation_steps=int(lt["gradient_accumulation_steps"]),
         learning_rate=float(lt["learning_rate"]),
@@ -80,7 +88,8 @@ def main() -> int:
         eval_strategy="epoch",
         save_strategy="epoch",
         seed=int(lt["random_seed"]),
-        bf16=device == "mps",
+        dataloader_pin_memory=False,
+        bf16=False,
         report_to=[],
     )
     trainer = Trainer(model=model, args=targs, train_dataset=train_tok, eval_dataset=eval_tok)

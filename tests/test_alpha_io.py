@@ -34,6 +34,33 @@ def test_load_jane_street_reads_parquet(fake_js: Path) -> None:
     assert "weight" in df.columns
 
 
+def test_load_jane_street_root_prefers_train_parquet(tmp_path: Path) -> None:
+    root = tmp_path / "js"
+    train_dir = root / "train.parquet"
+    test_dir = root / "test.parquet"
+    train_dir.mkdir(parents=True)
+    test_dir.mkdir(parents=True)
+
+    pl.DataFrame({
+        "date_id": [0, 1],
+        "symbol_id": [1, 1],
+        "feature_09": [1, 2],
+        "responder_6": [0.1, -0.2],
+        "weight": [1.0, 1.0],
+    }).write_parquet(train_dir / "part-0.parquet")
+    pl.DataFrame({
+        "date_id": [0],
+        "feature_09": [1.5],
+        "weight": [1.0],
+    }).write_parquet(test_dir / "part-0.parquet")
+
+    cfg = LoadConfig(target_column="responder_6", weight_column="weight", group_column="date_id")
+    df = load_jane_street(root, cfg)
+
+    assert df.height == 2
+    assert "responder_6" in df.columns
+
+
 def test_permanent_holdout_split_by_date_id(fake_js: Path) -> None:
     cfg = LoadConfig(target_column="responder_6", weight_column="weight", group_column="date_id", holdout_fraction=0.4)
     df = load_jane_street(fake_js, cfg)

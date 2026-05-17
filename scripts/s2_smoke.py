@@ -6,6 +6,7 @@ import tempfile
 from pathlib import Path
 
 import polars as pl
+import yaml
 from rich.console import Console
 
 console = Console()
@@ -30,13 +31,20 @@ def main() -> int:
         "trade_size_pct": [0.3, 0.6, 1.5, 0.1, 2.5],
     })
     with tempfile.TemporaryDirectory() as tmp:
-        path = Path(tmp) / "smoke.parquet"
+        tmp_path = Path(tmp)
+        path = tmp_path / "smoke.parquet"
         fixture.write_parquet(path)
+        cfg = yaml.safe_load(Path(args.config).read_text())
+        cfg["transport"]["primary_verdicts_dir"] = str(tmp_path / "s2_verdicts")
+        cfg["transport"]["tier3_verdicts_dir"] = str(tmp_path / "s2_verdicts_tier3")
+        cfg["transport"]["audit_log_dir"] = str(tmp_path / "audit")
+        smoke_config = tmp_path / "governor_smoke.yaml"
+        smoke_config.write_text(yaml.safe_dump(cfg), encoding="utf-8")
         from subprocess import run
 
         rc = run([
             sys.executable, "-m", "scripts.s2_govern",
-            "--config", args.config,
+            "--config", str(smoke_config),
             "--predictions", str(path),
             "--once",
         ], check=False).returncode

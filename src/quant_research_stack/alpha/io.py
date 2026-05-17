@@ -26,7 +26,14 @@ def load_jane_street(path: str | Path, config: LoadConfig) -> pl.DataFrame:
     if target.is_file():
         df = pl.read_parquet(target)
     else:
-        df = pl.read_parquet(list(target.rglob("*.parquet")))
+        train_dir = target / "train.parquet"
+        if train_dir.exists():
+            df = pl.read_parquet(train_dir)
+        else:
+            parquet_files = sorted(p for p in target.rglob("*.parquet") if p.is_file())
+            if not parquet_files:
+                raise FileNotFoundError(f"no parquet files found under {target}")
+            df = pl.read_parquet(parquet_files)
     required = {config.target_column, config.weight_column, config.group_column}
     missing = required - set(df.columns)
     if missing:
