@@ -1,0 +1,16 @@
+# Paper-broker credentials and capability overrides.
+
+brokers:
+  null_broker:
+    enabled: true
+  alpaca_paper:
+    enabled: true
+    credentials_path: ~/.alpaca/paper_keys.json
+    base_url: https://paper-api.alpaca.markets
+  binance_testnet:
+    enabled: true
+    credentials_path: ~/.binance/testnet_keys.json
+    rest_base_url: https://testnet.binance.vision
+    ws_base_url: wss://testnet.binance.vision/ws
+
+capability_overrides: {}  # per-venue overrides if a paper sandbox lacks a feature live has
