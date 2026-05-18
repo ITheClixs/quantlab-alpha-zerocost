@@ -76,6 +76,8 @@ def main() -> int:
     eval_tok = eval_ds.map(render, remove_columns=eval_ds.column_names)
 
     max_steps = int(lt.get("max_steps", -1))
+    use_bf16 = bool(lt.get("bf16", False))
+    use_fp16 = bool(lt.get("fp16", False))
     targs = TrainingArguments(
         output_dir=str(run_dir / "checkpoints"),
         num_train_epochs=int(lt["max_epochs"]),
@@ -84,12 +86,13 @@ def main() -> int:
         gradient_accumulation_steps=int(lt["gradient_accumulation_steps"]),
         learning_rate=float(lt["learning_rate"]),
         warmup_steps=int(lt["warmup_steps"]),
-        logging_steps=20,
-        eval_strategy="epoch",
-        save_strategy="epoch",
+        logging_steps=int(lt.get("logging_steps", 20)),
+        eval_strategy=str(lt.get("eval_strategy", "epoch")),
+        save_strategy=str(lt.get("save_strategy", "epoch")),
         seed=int(lt["random_seed"]),
         dataloader_pin_memory=False,
-        bf16=False,
+        bf16=use_bf16,
+        fp16=use_fp16,
         report_to=[],
     )
     trainer = Trainer(model=model, args=targs, train_dataset=train_tok, eval_dataset=eval_tok)
