@@ -10,7 +10,7 @@ PACKAGE_GRAMMAR_FULL_PATH = _PACKAGE_DIR / "grammar.gbnf"
 PACKAGE_GRAMMAR_TIER1_PATH = _PACKAGE_DIR / "grammar_tier1.gbnf"
 
 
-_FULL_GRAMMAR = """root ::= "{" ws "\\"signal_id\\":" ws string ws "," ws "\\"decision\\":" ws decision ws "," ws "\\"direction\\":" ws direction ws "," ws "\\"confidence\\":" ws confidence ws "," ws "\\"horizon_minutes\\":" ws posint ws "," ws "\\"regime_tag\\":" ws regime ws "," ws "\\"rationale_short\\":" ws string ws "," ws "\\"cited_paper_chunk_ids\\":" ws array_of_strings ws "," ws "\\"contradictions_flagged\\":" ws array_of_strings ws "}" ws
+_FULL_GRAMMAR = """root ::= "{" ws "\\"signal_id\\":" ws string ws "," ws "\\"decision\\":" ws decision ws "," ws "\\"direction\\":" ws direction ws "," ws "\\"confidence\\":" ws confidence ws "," ws "\\"horizon_minutes\\":" ws posint ws "," ws "\\"regime_tag\\":" ws regime ws "," ws "\\"rationale_short\\":" ws string ws "," ws "\\"cited_paper_chunk_ids\\":" ws arrayitems ws "," ws "\\"contradictions_flagged\\":" ws arrayitems ws "}" ws
 
 decision ::= "\\"pass\\"" | "\\"veto\\"" | "\\"insufficient_evidence\\""
 direction ::= "-1" | "0" | "1"
@@ -19,7 +19,7 @@ posint ::= [1-9] [0-9]*
 regime ::= "\\"trending\\"" | "\\"mean_reverting\\"" | "\\"high_vol\\"" | "\\"low_vol\\"" | "\\"unknown\\""
 string ::= "\\"" char* "\\""
 char ::= [^"\\\\\\n] | "\\\\" ["\\\\nrt]
-array_of_strings ::= "[" ws ( string ( ws "," ws string )* )? ws "]"
+arrayitems ::= "[" ws ( string ( ws "," ws string )* )? ws "]"
 ws ::= [ \\t\\n]*
 """
 
