@@ -28,7 +28,7 @@ from rich.console import Console
 
 from quant_research_stack.alpha.adversarial import adversarial_drop_features, drop_below_noise_floor
 from quant_research_stack.alpha.cv import PurgedKFold
-from quant_research_stack.alpha.features import FeatureConfig, build_feature_frame
+from quant_research_stack.alpha.features import FeatureConfig, build_training_features
 from quant_research_stack.alpha.io import (
     LoadConfig,
     permanent_holdout_split,
@@ -68,7 +68,6 @@ def parse_args() -> argparse.Namespace:
 
 
 def _build_features(df: pl.DataFrame, cfg: dict[str, Any]) -> tuple[pl.DataFrame, list[str]]:
-    feature_cols = [c for c in df.columns if c.startswith("feature_")]
     fcfg = FeatureConfig(
         lag_windows=cfg["features"]["lag_windows"],
         rolling_windows=cfg["features"]["rolling_windows"],
@@ -76,12 +75,7 @@ def _build_features(df: pl.DataFrame, cfg: dict[str, Any]) -> tuple[pl.DataFrame
         cross_sectional_ranks=cfg["features"]["cross_sectional_ranks"],
         noise_seed=42,
     )
-    built = build_feature_frame(
-        df, fcfg, base_features=feature_cols, date_col="date_id", symbol_col="symbol_id"
-    )
-    reserved = {"date_id", "symbol_id", "weight", cfg["data"]["target_column"]}
-    feature_cols_all = [c for c in built.columns if c not in reserved]
-    return built, feature_cols_all
+    return build_training_features(df, fcfg, date_col="date_id", symbol_col="symbol_id")
 
 
 def _materialize_slice_f32(
