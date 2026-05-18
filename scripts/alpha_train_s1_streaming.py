@@ -181,11 +181,15 @@ def main() -> int:
             f"{x_te.nbytes / 1e9:.2f}GB test in {time.time() - fold_t0:.1f}s"
         )
 
-        console.print(f"  fold {fold_i + 1}: ridge")
+        # Ridge: sklearn upcasts our float32 → float64 internally during fit, which OOMs
+        # macOS jetsam at 2.5M+ rows. Subsample fit-set to 100k. Predict on full test still.
+        sub_n = min(100_000, x_tr.shape[0])
+        sub_idx = np.random.default_rng(42 + fold_i).choice(x_tr.shape[0], size=sub_n, replace=False)
+        console.print(f"  fold {fold_i + 1}: ridge (fit on {sub_n:,}-row subsample)")
         rmod = RidgeAlphaModel(RidgeConfig(alpha=1.0))
-        rmod.fit(x_tr, y_tr, w_tr)
+        rmod.fit(x_tr[sub_idx], y_tr[sub_idx], w_tr[sub_idx])
         oof_ridge[te_idx] = rmod.predict(x_te)
-        del rmod
+        del rmod, sub_idx
         gc.collect()
 
         console.print(f"  fold {fold_i + 1}: lightgbm")
@@ -278,9 +282,14 @@ def main() -> int:
         holdout_feats, feat_cols, target_col, weight_col, np.arange(n_h)
     )
 
+    # Same Ridge subsample trick as per-fold to avoid sklearn float64 upcast OOM
+    h_sub_n = min(100_000, x_full.shape[0])
+    h_sub = np.random.default_rng(7).choice(x_full.shape[0], size=h_sub_n, replace=False)
+    console.print(f"Holdout ridge: fitting on {h_sub_n:,}-row subsample")
     h_ridge = RidgeAlphaModel(RidgeConfig(alpha=1.0))
-    h_ridge.fit(x_full, y_all, w_all)
+    h_ridge.fit(x_full[h_sub], y_all[h_sub], w_all[h_sub])
     h_pred_ridge = h_ridge.predict(x_h)
+    del h_sub
     h_pred_lgb = final_lgb.predict(x_h)
     holdout_stack = np.column_stack([
         h_pred_ridge,
