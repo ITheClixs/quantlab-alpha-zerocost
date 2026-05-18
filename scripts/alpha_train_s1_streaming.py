@@ -276,25 +276,80 @@ def main() -> int:
         holdout_feats, feat_cols, target_col, weight_col, np.arange(n_h)
     )
 
-    # Same Ridge subsample trick as per-fold to avoid sklearn float64 upcast OOM
+    # Refit ALL 5 base learners on the full train set for honest holdout prediction.
+    # Without this, the holdout stacker sees zeros in 3 of 5 columns and degenerates.
     h_sub_n = min(100_000, x_full.shape[0])
     h_sub = np.random.default_rng(7).choice(x_full.shape[0], size=h_sub_n, replace=False)
     console.print(f"Holdout ridge: fitting on {h_sub_n:,}-row subsample")
     h_ridge = RidgeAlphaModel(RidgeConfig(alpha=1.0))
     h_ridge.fit(x_full[h_sub], y_all[h_sub], w_all[h_sub])
     h_pred_ridge = h_ridge.predict(x_h)
-    del h_sub
+    del h_ridge, h_sub
+    gc.collect()
     h_pred_lgb = final_lgb.predict(x_h)
+
+    # Internal early-stop eval = last 1% of full train (NEVER touches holdout).
+    es_cut = max(1, int(n * 0.99))
+
+    console.print("Holdout XGB: refit on full train")
+    xcfg = cfg["models"]["xgboost"]
+    h_xgb = XGBoostAlphaModel(XGBoostConfig(**{
+        k: xcfg[k] for k in ("max_depth", "learning_rate", "n_estimators",
+                             "early_stopping_rounds", "tree_method")
+    }))
+    h_xgb.fit(x_full[:es_cut], y_all[:es_cut], w_all[:es_cut],
+              x_full[es_cut:], y_all[es_cut:], w_all[es_cut:])
+    h_pred_xgb = h_xgb.predict(x_h)
+    del h_xgb
+    gc.collect()
+
+    console.print("Holdout CatBoost: refit on full train")
+    ccfg = cfg["models"]["catboost"]
+    h_cat = CatBoostAlphaModel(CatBoostConfig(**{
+        k: ccfg[k] for k in ("depth", "learning_rate", "n_estimators", "early_stopping_rounds")
+    }))
+    h_cat.fit(x_full[:es_cut], y_all[:es_cut], w_all[:es_cut],
+              x_full[es_cut:], y_all[es_cut:], w_all[es_cut:])
+    h_pred_cat = h_cat.predict(x_h)
+    del h_cat
+    gc.collect()
+
+    console.print("Holdout MLP: refit on full train")
+    mcfg = cfg["models"]["mlp"]
+    h_mlp = MLPAlphaModel(MLPConfig(
+        hidden_dims=mcfg["hidden_dims"],
+        dropout=mcfg["dropout"],
+        learning_rate=mcfg["learning_rate"],
+        batch_size=mcfg["batch_size"],
+        max_epochs=mcfg["max_epochs"],
+        patience=mcfg["patience"],
+        mixed_precision=mcfg["mixed_precision"],
+    ))
+    h_mlp.fit(x_full[:es_cut], y_all[:es_cut], w_all[:es_cut],
+              x_full[es_cut:], y_all[es_cut:], w_all[es_cut:])
+    h_pred_mlp = h_mlp.predict(x_h)
+    del h_mlp
+    gc.collect()
+
     holdout_stack = np.column_stack([
-        h_pred_ridge,
-        h_pred_lgb,
-        np.zeros(n_h, dtype=np.float32),
-        np.zeros(n_h, dtype=np.float32),
-        np.zeros(n_h, dtype=np.float32),
+        h_pred_ridge, h_pred_lgb, h_pred_xgb, h_pred_cat, h_pred_mlp,
     ]).astype(np.float32)
     holdout_pred = stacker.predict(holdout_stack)
     holdout_r2 = weighted_zero_mean_r2(y_h, holdout_pred, w_h)
-    console.print(f"[bold green]Holdout weighted zero-mean R²:[/bold green] {holdout_r2:.6f}")
+    console.print(f"[bold green]Holdout (stacker) weighted zero-mean R²:[/bold green] {holdout_r2:.6f}")
+
+    # Also report mean-ensemble and per-tree holdout R² for sanity vs the stacker.
+    pred_mean = (h_pred_lgb + h_pred_xgb + h_pred_cat) / 3.0
+    r2_mean = weighted_zero_mean_r2(y_h, pred_mean, w_h)
+    per_model_holdout = {
+        "ridge_r2": float(weighted_zero_mean_r2(y_h, h_pred_ridge, w_h)),
+        "lgb_r2": float(weighted_zero_mean_r2(y_h, h_pred_lgb, w_h)),
+        "xgb_r2": float(weighted_zero_mean_r2(y_h, h_pred_xgb, w_h)),
+        "cat_r2": float(weighted_zero_mean_r2(y_h, h_pred_cat, w_h)),
+        "mlp_r2": float(weighted_zero_mean_r2(y_h, h_pred_mlp, w_h)),
+        "tree_mean_r2": float(r2_mean),
+    }
+    console.print(f"Per-model holdout R²: {per_model_holdout}")
 
     # Persist artifacts
     reg = RunRegistry(root=Path(args.experiments_root))
@@ -316,12 +371,13 @@ def main() -> int:
     reg.save_artifact(run_id, "metrics.json", json.dumps({
         "fold_metrics": fold_metrics,
         "holdout_weighted_zero_mean_r2": float(holdout_r2),
+        "holdout_per_model_r2": per_model_holdout,
         "n_features_after_adversarial": len(feat_cols),
         "n_features_after_noise_floor": len(kept_after_noise),
         "training_rows": int(n),
         "holdout_rows": int(n_h),
         "max_rows_budget": int(max_rows),
-        "profile": "streaming",
+        "profile": "streaming_full_holdout_refit",
     }, indent=2).encode())
     console.print(f"Run id: {run_id}")
     console.print(f"Artifacts under: experiments/alpha_s1/{run_id}/")
