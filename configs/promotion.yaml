@@ -1,0 +1,17 @@
+paper_to_live_shadow:
+  min_days_in_paper: 30
+  min_sharpe: 1.0
+  max_daily_dd_pct: 0.05
+  no_kill_triggers_days: 14
+  max_audit_anomalies: 0
+  required_artifacts:
+    - "experiments/alpha_s1/<latest>/metrics.json with holdout_weighted_zero_mean_r2 >= 0.012"
+    - "experiments/s2_verdicts_*/<date>.jsonl present for all paper days"
+
+live_shadow_to_live:
+  min_days_in_live_shadow: 14
+  max_reconciliation_diff_bps: 1.0
+  max_feed_gap_violations: 0
+  kill_switch_drill_passed: true
+  required_artifacts:
+    - "docs/runbooks/paper_to_live_shadow.md  (signed promotion report)"

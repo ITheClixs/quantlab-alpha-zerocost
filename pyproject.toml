@@ -61,6 +61,7 @@ addopts = "-q -m 'not governor_slow and not s3_integration'"
 markers = [
     "governor_slow: integration tests that load LLM models (skipped by default)",
     "s3_integration: feed/broker integration tests that hit live or paper endpoints (skipped by default)",
+    "s4_integration: requires running brokers/feeds (skipped in default run)",
 ]
 asyncio_mode = "auto"
 
