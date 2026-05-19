@@ -4,6 +4,7 @@ import json
 from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any, cast
 
 from quant_research_stack.governor.corpus import Chunk
 from quant_research_stack.governor.signal_schema import GovernorVerdict
@@ -16,8 +17,9 @@ class Tier1Runtime:
     max_new_tokens: int = 256
 
     def __post_init__(self) -> None:
-        self._tokenizer = None
-        self._model = None
+        self._tokenizer: Any | None = None
+        self._model: Any | None = None
+        self._device = "cpu"
 
     def _load(self) -> None:
         if self._model is not None:
@@ -28,7 +30,8 @@ class Tier1Runtime:
 
         device = "mps" if torch.backends.mps.is_available() else "cpu"
         self._tokenizer = AutoTokenizer.from_pretrained(self.base_model_dir)
-        model = AutoModelForCausalLM.from_pretrained(self.base_model_dir).to(device)
+        model_factory = cast(Any, AutoModelForCausalLM)
+        model: Any = model_factory.from_pretrained(self.base_model_dir).to(device)
         if self.adapter_dir is not None and Path(self.adapter_dir).exists():
             model = PeftModel.from_pretrained(model, self.adapter_dir).to(device)
         model.eval()
@@ -40,16 +43,20 @@ class Tier1Runtime:
 
         self._load()
         prompt = self._render_prompt(signal)
-        inputs = self._tokenizer(prompt, return_tensors="pt", truncation=True, max_length=1024).to(self._device)
+        tokenizer = self._tokenizer
+        model = self._model
+        assert tokenizer is not None
+        assert model is not None
+        inputs = tokenizer(prompt, return_tensors="pt", truncation=True, max_length=1024).to(self._device)
         with torch.no_grad():
-            out = self._model.generate(
+            out = model.generate(
                 **inputs,
                 max_new_tokens=self.max_new_tokens,
                 do_sample=False,
                 temperature=0.0,
-                pad_token_id=self._tokenizer.eos_token_id,
+                pad_token_id=tokenizer.eos_token_id,
             )
-        text = self._tokenizer.decode(out[0][inputs["input_ids"].shape[1]:], skip_special_tokens=True).strip()
+        text = tokenizer.decode(out[0][inputs["input_ids"].shape[1]:], skip_special_tokens=True).strip()
         try:
             payload = json.loads(text)
             payload["cited_paper_chunk_ids"] = []

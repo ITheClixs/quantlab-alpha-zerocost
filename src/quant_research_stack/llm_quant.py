@@ -75,7 +75,7 @@ def choose_local_model(config: dict[str, Any], repo_root: str | Path = ".") -> L
         gguf_files = sorted(local_dir.glob("*.gguf"))
         preferred_quant = str(runtime.get("preferred_quant", "Q4_K_M")).lower()
         preferred = [path for path in gguf_files if preferred_quant in path.name.lower()]
-        selected = (preferred or gguf_files or [None])[0]
+        selected = preferred[0] if preferred else (gguf_files[0] if gguf_files else None)
         if selected is not None:
             return LocalModelChoice(str(model_id), local_dir, selected, role)
     raw_dir = runtime.get("primary_local_dir", "models/huggingface")

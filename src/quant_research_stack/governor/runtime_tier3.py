@@ -5,6 +5,7 @@ import threading
 from dataclasses import dataclass, field
 from pathlib import Path
 from queue import Queue
+from typing import Any
 
 from quant_research_stack.governor.corpus import Chunk
 from quant_research_stack.governor.grammar import generate_full_grammar
@@ -21,7 +22,8 @@ class Tier3Runtime:
     n_gpu_layers: int = -1
     max_new_tokens: int = 512
     queue: Queue = field(default_factory=Queue)
-    _llm: object = None
+    _llm: Any | None = None
+    _grammar: Any | None = None
     _thread: threading.Thread | None = None
     _stop: threading.Event = field(default_factory=threading.Event)
 
@@ -61,6 +63,8 @@ class Tier3Runtime:
 
     def _loop(self) -> None:
         self._load()
+        assert self._llm is not None
+        assert self._grammar is not None
         while not self._stop.is_set():
             item = self.queue.get()
             if item is None:

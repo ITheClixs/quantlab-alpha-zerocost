@@ -30,7 +30,7 @@ class VerdictWriter:
 def tail_verdicts(path: str | Path) -> Iterator[dict]:
     p = Path(path)
     if not p.exists():
-        return iter(())
+        return
     with p.open("r", encoding="utf-8") as handle:
         for line in handle:
             line = line.strip()

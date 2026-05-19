@@ -32,9 +32,12 @@ class KillSwitchWatcher:
         loop = asyncio.get_running_loop()
         for sig_name in (signal.SIGTERM, signal.SIGINT):
             try:
-                loop.add_signal_handler(sig_name, lambda s=sig_name: asyncio.create_task(self._trigger(s.name)))
+                loop.add_signal_handler(sig_name, self._schedule_signal_trigger, sig_name.name)
             except NotImplementedError:
                 pass
+
+    def _schedule_signal_trigger(self, reason: str) -> None:
+        asyncio.create_task(self._trigger(reason))
 
     async def run(self) -> None:
         while not self._stop:

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import math
+from typing import Any, cast
 
 import polars as pl
 
@@ -10,8 +11,8 @@ from quant_research_stack.brokers.order_types import Fill, OrderSide
 def total_return(equity_curve: pl.DataFrame) -> float:
     if equity_curve.height == 0:
         return 0.0
-    start = float(equity_curve["equity"][0])
-    end = float(equity_curve["equity"][-1])
+    start = float(cast(float, equity_curve["equity"][0]))
+    end = float(cast(float, equity_curve["equity"][-1]))
     if start <= 0.0:
         return 0.0
     return (end - start) / start
@@ -23,7 +24,7 @@ def max_drawdown(equity_curve: pl.DataFrame) -> float:
     peak = float("-inf")
     worst = 0.0
     for value in equity_curve["equity"].to_list():
-        v = float(value)
+        v = float(cast(float, value))
         if v > peak:
             peak = v
         dd = (v - peak) / peak if peak > 0 else 0.0
@@ -35,8 +36,12 @@ def max_drawdown(equity_curve: pl.DataFrame) -> float:
 def sharpe_ratio(returns: pl.Series, periods_per_year: int) -> float:
     if returns.len() == 0:
         return 0.0
-    mu = float(returns.mean())
-    sigma = float(returns.std())
+    mu_raw = returns.mean()
+    sigma_raw = returns.std()
+    if mu_raw is None or sigma_raw is None:
+        return 0.0
+    mu = float(cast(Any, mu_raw))
+    sigma = float(cast(Any, sigma_raw))
     if sigma == 0.0 or math.isnan(sigma):
         return 0.0
     return (mu / sigma) * math.sqrt(periods_per_year)
@@ -84,4 +89,5 @@ def turnover(fills: list[Fill], starting_cash: float) -> float:
 def value_at_risk(returns: pl.Series, alpha: float = 0.05) -> float:
     if returns.len() == 0:
         return 0.0
-    return float(returns.quantile(alpha))
+    quantile = returns.quantile(alpha)
+    return 0.0 if quantile is None else float(quantile)

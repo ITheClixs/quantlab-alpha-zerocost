@@ -4,6 +4,7 @@ import json
 from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 from quant_research_stack.governor.corpus import Chunk
 from quant_research_stack.governor.grammar import generate_full_grammar
@@ -19,7 +20,8 @@ class Tier2Runtime:
     max_new_tokens: int = 384
 
     def __post_init__(self) -> None:
-        self._llm = None
+        self._llm: Any | None = None
+        self._grammar: Any | None = None
         self._grammar_text = generate_full_grammar()
 
     def _load(self) -> None:
@@ -37,6 +39,8 @@ class Tier2Runtime:
 
     def govern(self, signal, retrieval: Iterable[Chunk] | None) -> GovernorVerdict:
         self._load()
+        assert self._llm is not None
+        assert self._grammar is not None
         chunks = list(retrieval or [])
         prompt = (
             f"<s>[INST] {SYSTEM_PROMPT}\n\n{build_user_message(signal, chunks)} [/INST]"

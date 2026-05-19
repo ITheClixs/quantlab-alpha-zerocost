@@ -27,6 +27,7 @@ class AuditLog:
                 self._maybe_chmod(self._current_path)
             self._current_day = today
             self._current_path = self.root / f"{today}.jsonl"
+        assert self._current_path is not None
         return self._current_path
 
     def append(self, event: str, payload: dict[str, Any]) -> None:

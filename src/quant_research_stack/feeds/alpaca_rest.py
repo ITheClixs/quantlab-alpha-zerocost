@@ -61,7 +61,7 @@ class AlpacaREST(AsyncFeedBase):
         headers = {"APCA-API-KEY-ID": api_key, "APCA-API-SECRET-KEY": api_secret}
         async with httpx.AsyncClient(timeout=10.0, headers=headers) as client:
             while not self._closed:
-                params = {
+                params: dict[str, str | int] = {
                     "symbols": ",".join(self._symbols),
                     "timeframe": f"{self.interval_seconds // 60}Min",
                     "limit": 1000,

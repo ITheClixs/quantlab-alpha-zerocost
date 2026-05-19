@@ -5,6 +5,7 @@ import json
 from collections.abc import AsyncIterator, Iterable
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from typing import Any
 
 import websockets
 
@@ -38,7 +39,7 @@ class CoinbaseWS(AsyncFeedBase):
     def __post_init__(self) -> None:
         super().__init__()
         self._symbols: tuple[str, ...] = ()
-        self._ws = None
+        self._ws: Any | None = None
         self._closed = False
 
     async def subscribe(self, symbols: Iterable[str]) -> None:
@@ -66,6 +67,7 @@ class CoinbaseWS(AsyncFeedBase):
         if self._ws is None:
             await self._connect()
         while not self._closed:
+            assert self._ws is not None
             try:
                 msg = await self._ws.recv()
             except Exception:

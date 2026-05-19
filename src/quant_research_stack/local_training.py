@@ -157,7 +157,7 @@ def train_task(task: SignalTrainingTask) -> dict[str, Any]:
             random_state=42,
         ),
     }
-    model_results = {
+    model_results: dict[str, dict[str, float | str]] = {
         "zero": {
             "zero_mean_r2": zero_mean_r2(y_valid, zero_pred),
             "directional_accuracy": directional_accuracy(y_valid, zero_pred),
@@ -174,7 +174,7 @@ def train_task(task: SignalTrainingTask) -> dict[str, Any]:
             "artifact": str(model_path),
         }
 
-    best_model = max(model_results, key=lambda key: model_results[key]["zero_mean_r2"])
+    best_model = max(model_results, key=lambda key: float(model_results[key]["zero_mean_r2"]))
     report = {
         "task": task.name,
         "input_root": str(task.input_root),

@@ -30,7 +30,7 @@ class AuditWriter:
 def replay_audit(path: str | Path) -> Iterator[dict[str, Any]]:
     p = Path(path)
     if not p.exists():
-        return iter(())
+        return
     with p.open("r", encoding="utf-8") as handle:
         for line in handle:
             line = line.strip()
