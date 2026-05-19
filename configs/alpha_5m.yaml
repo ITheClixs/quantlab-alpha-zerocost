@@ -24,14 +24,19 @@ features:
 models:
   ridge:
     alpha_grid: [0.1, 1.0, 10.0]
+  # Optuna-tuned (30 trials × 3 folds × 1.5M rows, leak-fixed) → CV R² 0.0529 vs the
+  # default-config CV R² ~0.044 in fold 1 → 20% relative improvement. Tuned params favor
+  # wider trees (210 leaves), bounded depth (10), much lower LR (0.0064), smaller
+  # feature_fraction (0.66), higher bagging_fraction (0.91). Report at
+  # reports/alpha_optuna_lgb_clean.json.
   lightgbm:
-    num_leaves: 63
-    max_depth: -1
-    learning_rate: 0.05
-    n_estimators: 800
-    early_stopping_rounds: 50
-    feature_fraction: 0.85
-    bagging_fraction: 0.8
+    num_leaves: 210
+    max_depth: 10
+    learning_rate: 0.006374677881986455
+    n_estimators: 2000
+    early_stopping_rounds: 100
+    feature_fraction: 0.6573387635366837
+    bagging_fraction: 0.9094493379723054
   xgboost:
     max_depth: 6
     learning_rate: 0.05
