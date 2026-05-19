@@ -11,8 +11,13 @@ import yaml
 from rich.console import Console
 
 from quant_research_stack.alpha.cv import PurgedKFold
-from quant_research_stack.alpha.features import FeatureConfig, build_feature_frame
-from quant_research_stack.alpha.io import LoadConfig, load_jane_street, permanent_holdout_split
+from quant_research_stack.alpha.features import FeatureConfig, build_training_features
+from quant_research_stack.alpha.io import (
+    LoadConfig,
+    permanent_holdout_split,
+    scan_jane_street,
+    select_tail_by_row_budget,
+)
 from quant_research_stack.alpha.metrics import weighted_zero_mean_r2
 from quant_research_stack.alpha.models.lightgbm_model import LightGBMAlphaModel, LightGBMConfig
 
@@ -38,11 +43,15 @@ def main() -> int:
         group_column=cfg["data"]["group_column"],
         holdout_fraction=cfg["data"]["permanent_holdout_fraction"],
     )
-    df = load_jane_street(cfg["data"]["jane_street_root"], load_cfg)
-    if args.max_rows is not None:
-        df = df.head(args.max_rows)
+    # Lazy + tail-budget loading + leak-fixed feature selection. Mirrors the streaming
+    # trainer so Optuna sees exactly the dataset and feature set the production run uses.
+    lf = scan_jane_street(cfg["data"]["jane_street_root"], load_cfg)
+    max_rows = args.max_rows if args.max_rows is not None else int(cfg["data"].get("max_rows", 0))
+    if max_rows and max_rows > 0:
+        df = select_tail_by_row_budget(lf, load_cfg.group_column, max_rows=max_rows)
+    else:
+        df = lf.collect().sort(load_cfg.group_column)
     train_df, _ = permanent_holdout_split(df, load_cfg)
-    feature_cols = [c for c in train_df.columns if c.startswith("feature_")]
     fcfg = FeatureConfig(
         lag_windows=cfg["features"]["lag_windows"],
         rolling_windows=cfg["features"]["rolling_windows"],
@@ -50,11 +59,13 @@ def main() -> int:
         cross_sectional_ranks=cfg["features"]["cross_sectional_ranks"],
         noise_seed=42,
     )
-    built = build_feature_frame(train_df, fcfg, base_features=feature_cols, date_col="date_id", symbol_col="symbol_id")
-    fc = [c for c in built.columns if c not in {"date_id", "symbol_id", "weight", cfg["data"]["target_column"]}]
-    y = built[cfg["data"]["target_column"]].to_numpy().astype(np.float64)
-    w = built[cfg["data"]["weight_column"]].to_numpy().astype(np.float64)
-    x = built.select(fc).to_numpy().astype(np.float64)
+    built, fc = build_training_features(train_df, fcfg, date_col="date_id", symbol_col="symbol_id")
+    leaked = [c for c in fc if c.startswith("responder_")]
+    if leaked:
+        raise RuntimeError(f"leak guard tripped: responder_* in features: {leaked}")
+    y = built[cfg["data"]["target_column"]].to_numpy().astype(np.float32)
+    w = built[cfg["data"]["weight_column"]].to_numpy().astype(np.float32)
+    x = built.select(fc).to_numpy().astype(np.float32)
     x = np.nan_to_num(x, nan=0.0)
 
     splitter = PurgedKFold(
