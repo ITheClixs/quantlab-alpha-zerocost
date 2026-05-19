@@ -379,6 +379,53 @@ def main() -> int:
         "max_rows_budget": int(max_rows),
         "profile": "streaming_full_holdout_refit",
     }, indent=2).encode())
+
+    # Spec §13 deliverables: predictions.parquet, feature_importance.parquet, cv_folds.json
+    run_dir = Path(args.experiments_root) / run_id
+    predictions_df = pl.DataFrame({
+        "split": ["oof"] * n + ["holdout"] * n_h,
+        "target_actual": np.concatenate([y_all, y_h]).astype(np.float32),
+        "weight": np.concatenate([w_all, w_h]).astype(np.float32),
+        "ridge": np.concatenate([oof_ridge, h_pred_ridge.astype(np.float32)]),
+        "lgb": np.concatenate([oof_lgb, h_pred_lgb.astype(np.float32)]),
+        "xgb": np.concatenate([oof_xgb, h_pred_xgb.astype(np.float32)]),
+        "cat": np.concatenate([oof_cat, h_pred_cat.astype(np.float32)]),
+        "mlp": np.concatenate([oof_mlp, h_pred_mlp.astype(np.float32)]),
+        "stacked": np.concatenate([
+            stacker.predict(stack_x).astype(np.float32),
+            holdout_pred.astype(np.float32),
+        ]),
+    })
+    predictions_df.write_parquet(run_dir / "predictions.parquet", compression="zstd")
+
+    importance_df = pl.DataFrame({
+        "feature": feat_cols,
+        "lgb_importance": importance.astype(np.float64),
+        "kept_after_noise_floor": [c in set(kept_after_noise) for c in feat_cols],
+    })
+    importance_df.write_parquet(run_dir / "feature_importance.parquet", compression="zstd")
+
+    cv_folds_payload = {
+        "n_folds": cfg["cv"]["n_folds"],
+        "purge_days": cfg["cv"]["purge_days"],
+        "embargo_days": cfg["cv"]["embargo_days"],
+        "group_column": "date_id",
+        "training_dates": train_feats["date_id"].unique().sort().to_list(),
+        "holdout_dates": holdout_feats["date_id"].unique().sort().to_list(),
+    }
+    (run_dir / "cv_folds.json").write_text(json.dumps(cv_folds_payload, indent=2))
+
+    # Persist the linear stacker (the only model still in scope here — base learners were
+    # freed per-fold to save memory). For a true models/ directory with per-model artifacts,
+    # the streaming script would need to keep them alive across folds, which conflicts with
+    # the per-fold materialization design. The base-learner hyperparameters are captured
+    # in metadata.json (via the hyperparams config snapshot).
+    models_dir = run_dir / "models"
+    models_dir.mkdir(parents=True, exist_ok=True)
+    import joblib  # local import — only needed at save time
+    joblib.dump({"weights": stacker.weights().tolist(), "feature_order": ["ridge", "lgb", "xgb", "cat", "mlp"]},
+                models_dir / "stacker.joblib")
+
     console.print(f"Run id: {run_id}")
     console.print(f"Artifacts under: experiments/alpha_s1/{run_id}/")
     return 0
