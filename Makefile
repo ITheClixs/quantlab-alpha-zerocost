@@ -79,3 +79,28 @@ backtest:
 
 backtest-smoke:
 	$(PY) python $(BACKTEST_RUN) --config configs/backtests/smoke.yaml
+
+S4_EXECUTE := scripts/s4_execute.py
+PROMOTION_REPORT := scripts/generate_promotion_report.py
+AUDIT_REPLAY := scripts/audit_replay_check.py
+S4_STAGE ?= paper
+S4_ASSET ?= crypto
+S4_EQUITY ?= 100000
+
+.PHONY: s4-execute s4-promotion-report s4-audit-replay s4-smoke
+
+s4-execute:
+	QUANTLAB_STAGE=$(S4_STAGE) $(PY) python $(S4_EXECUTE) \
+	  --risk-config configs/risk.yaml --exec-config configs/exec.yaml \
+	  --brokers-config configs/brokers.yaml --asset-class $(S4_ASSET) \
+	  --starting-equity $(S4_EQUITY)
+
+s4-promotion-report:
+	$(PY) python $(PROMOTION_REPORT) --from-stage paper --to-stage live_shadow \
+	  --audit-root logs/audit/s4/paper
+
+s4-audit-replay:
+	$(PY) python $(AUDIT_REPLAY) --audit-dir logs/audit/s4/paper --stage paper
+
+s4-smoke:
+	$(PY) pytest tests/integration/test_s4_*.py -v -m s4_integration
