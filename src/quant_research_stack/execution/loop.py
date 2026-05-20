@@ -57,6 +57,19 @@ class S4Loop:
         )
         self._orders_last_minute: list[datetime] = []
         self._fill_consumer_task: asyncio.Task[None] | None = None
+        self._snapshot_interval_s = int(exec_cfg.position_book.snapshot_interval_seconds)
+        self._snapshot_task: asyncio.Task[None] | None = None
+        found = self._book.load_latest_snapshot()
+        self._audit.append("position_book_loaded", {"snapshots_found": found})
+
+    async def _periodic_snapshot(self) -> None:
+        while True:
+            await asyncio.sleep(self._snapshot_interval_s)
+            try:
+                path = self._book.snapshot()
+                self._audit.append("position_snapshot", {"path": str(path)})
+            except Exception as exc:  # noqa: BLE001
+                self._audit.append("position_snapshot_error", {"error": str(exc)})
 
     async def _consume_fills(self) -> None:
         async for fill in self._broker.stream_fills():
@@ -77,6 +90,7 @@ class S4Loop:
 
     async def run(self, max_tickets: int | None = None) -> None:
         self._fill_consumer_task = asyncio.create_task(self._consume_fills())
+        self._snapshot_task = asyncio.create_task(self._periodic_snapshot())
         try:
             processed = 0
             async for ticket in self._ingestor.stream():
@@ -86,11 +100,13 @@ class S4Loop:
                     self._ingestor.stop()
                     return
         finally:
-            if self._fill_consumer_task is not None:
-                self._fill_consumer_task.cancel()
-                with contextlib.suppress(asyncio.CancelledError):
-                    await self._fill_consumer_task
-                self._fill_consumer_task = None
+            for task_attr in ("_fill_consumer_task", "_snapshot_task"):
+                task = getattr(self, task_attr)
+                if task is not None:
+                    task.cancel()
+                    with contextlib.suppress(asyncio.CancelledError):
+                        await task
+                    setattr(self, task_attr, None)
 
     async def _handle(self, ticket: ExecutionTicket) -> None:
         sym = ticket.signal.symbol
