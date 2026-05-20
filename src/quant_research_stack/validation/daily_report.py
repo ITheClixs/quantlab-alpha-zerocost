@@ -25,6 +25,7 @@ class PerSignalRow:
     hit: bool | None  # None when no trade was placed
     weight: float
     fill_ts_utc: datetime
+    fee: float = 0.0
 
 
 @dataclass(frozen=True)
@@ -156,4 +157,5 @@ def build_per_signal_table(rows: list[PerSignalRow]) -> pl.DataFrame:
         "hit": [r.hit for r in rows],
         "weight": [float(r.weight) for r in rows],
         "fill_ts_utc": [r.fill_ts_utc for r in rows],
+        "fee": [float(r.fee) for r in rows],
     })

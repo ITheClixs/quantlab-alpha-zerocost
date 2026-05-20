@@ -11,7 +11,7 @@ QuantLab Alpha is a local-first alpha research platform for mid-frequency equiti
 1. **S1 Tabular Predictor** estimates `responder_6` and related return targets with leakage-aware tabular machine learning.
 2. **S2 LLM Governor** reviews trade candidates through a retrieval-augmented, citation-constrained local LLM pipeline.
 
-The platform is not a claim of profitability. It is a research harness for testing whether open data, engineered market features, and local models can produce signals that pass out-of-sample validation before they are considered for paper trading. The current branch includes S1 alpha modules, S2 governor modules, platform ADRs, runbooks, and a stage-gated execution design.
+The platform is not a claim of profitability. It is a research harness for testing whether open data, engineered market features, and local models can produce signals that pass out-of-sample validation before they are considered for paper trading. The current branch includes S1 alpha modules, S2 governor modules, S3 feed/broker adapters, S4 paper-stage execution/risk modules, platform ADRs, runbooks, and S4.1 paper-validation tooling.
 
 ## Research Thesis
 
@@ -34,7 +34,7 @@ The latest commits move the project from a data/model workspace into a structure
 
 1. **S1 alpha package** with feature engineering, purged cross-validation, base model wrappers, stacking, metrics, registry, inference, adversarial validation, and training scripts.
 2. **S2 governor package** with stable corpus indexing, BM25 retrieval, FAISS dense retrieval, reranking, hybrid retrieval orchestration, fixed retrieval-query template, and Pydantic verdict schema.
-3. **Operational specifications** for a four-subsystem platform: S1 predictor, S2 governor, S3 feeds/brokers, and S4 execution/risk.
+3. **Operational modules and specifications** for a four-subsystem platform: S1 predictor, S2 governor, S3 feeds/brokers, and S4 execution/risk.
 4. **Stage-gated safety model** using `paper`, `live_shadow`, and `live` promotion states.
 5. **Local-only LLM design** using GGUF models and local research corpora rather than paid hosted inference.
 
@@ -66,8 +66,9 @@ This repository is also not financial advice. The operator is responsible for fu
 |---|---|
 | S1 Tabular Predictor | Implemented package under `src/quant_research_stack/alpha/`; includes features, CV, models, stacking, metrics, inference, registry, and scripts |
 | S2 LLM Governor | Implemented foundation under `src/quant_research_stack/governor/`; includes corpus, BM25, dense index, reranker protocol, hybrid retrieval, schema, query builder |
-| S3 Feeds + Brokers | Specified in master design; feed/broker adapters still future work |
-| S4 Execution + Risk | Specified in master design; runbooks and ADRs exist, execution modules still future work |
+| S3 Feeds + Brokers | Implemented package under `src/quant_research_stack/feeds/` and `src/quant_research_stack/brokers/`; includes public feed adapters, recorder/replayer, null broker, Alpaca paper, Binance testnet, and contract tests |
+| S4 Execution + Risk | Implemented package under `src/quant_research_stack/execution/`; includes signal pairing, risk gate, sizing, broker routing, position book, reconciliation, kill switch, audit log, daemon, and promotion report tooling |
+| S4.1 Paper Validation | Implemented package under `src/quant_research_stack/validation/` plus `scripts/tv_validation_report.py`; includes Alpaca/fixture forward bars, hit rate, governor block rate, net daily PnL, drawdown, rolling Sharpe, and per-signal parquet outputs |
 | Stage | `QUANTLAB_STAGE`, default target is `paper` |
 | Kill switch | `KILL_TRADING` file in repo root, documented in runbooks |
 | S1 success target | holdout weighted zero-mean R2 at least `0.012`, fold standard deviation at most `0.002` |
@@ -395,9 +396,9 @@ decision_3 \ne veto.
 
 Plain English: any veto or insufficient-evidence result blocks the trade.
 
-## S3 and S4 Execution Research Plan
+## S3 and S4 Execution Status
 
-S3 and S4 are specified but not fully implemented. Their research contract is:
+S3 and S4 now have paper-stage implementations. Their research contract remains:
 
 1. feed adapters normalize public crypto and free-tier equity data;
 2. broker adapters are stage-gated;
@@ -525,7 +526,8 @@ The newest commits indicate that the active development front is S2 Governor inf
 
 - S1 can be benchmarked locally, but a high score is not equivalent to a profitable live strategy.
 - S2 can veto unsupported trades, but it does not prove that approved trades are profitable.
-- S3/S4 are still design-stage modules, so current README language treats broker execution as a gated plan, not as shipped live trading.
+- S3/S4 are paper-stage modules. They are not live-trading approval, and live broker adapters remain intentionally blocked behind human promotion controls.
+- S4.1 paper-validation reports require valid Alpaca data credentials, S1/S2 artifacts, and S4 fill audit logs before promotion gates should be treated as operational evidence.
 - Free data limits make sub-millisecond equity HFT out of scope.
 - Real-money use requires broker permissions, tax handling, regulatory review, and operator responsibility.
 

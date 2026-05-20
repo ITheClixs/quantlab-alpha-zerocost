@@ -31,13 +31,19 @@ from quant_research_stack.validation.daily_report import (
     render_markdown,
 )
 from quant_research_stack.validation.forward_returns import (
+    AlpacaBarsLoader,
     Bar,
+    BarLoader,
     ForwardReturnRequest,
     fetch_forward_returns,
 )
 from quant_research_stack.validation.hit_rate import (
     ScoredSignal,
     compute_hit_rate,
+)
+from quant_research_stack.validation.pnl import (
+    compute_daily_pnl_metrics,
+    load_historical_daily_pnl_pct,
 )
 from quant_research_stack.validation.reconcile import summarize_reconciliation
 
@@ -54,6 +60,9 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--verdicts-dir", default="experiments/s2_verdicts_balanced")
     p.add_argument("--position-snapshot-root", default="data/positions")
     p.add_argument("--starting-equity", default="100000")
+    p.add_argument("--bar-fixture-parquet", default=None)
+    p.add_argument("--alpaca-data-credentials-path", default="~/.alpaca/paper_keys.json")
+    p.add_argument("--alpaca-data-base-url", default="https://data.alpaca.markets/v2/stocks/bars")
     return p.parse_args()
 
 
@@ -107,9 +116,54 @@ def _load_fills(audit_root: Path, stage: str, date_str: str) -> dict[str, dict[s
     return out
 
 
-def _zero_bar_loader(_symbol: str, _ts: datetime) -> Bar | None:
-    """Stub: no live bar source wired yet. Real wiring is a follow-up task."""
+def _missing_bar_loader(_symbol: str, _ts: datetime) -> Bar | None:
     return None
+
+
+def _as_utc(value: Any) -> datetime:
+    if isinstance(value, datetime):
+        dt = value
+    else:
+        dt = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=UTC)
+    return dt.astimezone(UTC)
+
+
+def _fixture_bar_loader(path: Path) -> BarLoader:
+    df = pl.read_parquet(path)
+    bars: dict[tuple[str, datetime], Bar] = {}
+    for row in df.iter_rows(named=True):
+        symbol = str(row["symbol"])
+        ts = _as_utc(row["ts_utc"]).replace(second=0, microsecond=0)
+        bars[(symbol, ts)] = Bar(
+            symbol=symbol,
+            ts_utc=ts,
+            open=float(row["open"]),
+            high=float(row["high"]),
+            low=float(row["low"]),
+            close=float(row["close"]),
+            volume=int(row.get("volume") or 0),
+        )
+
+    def load(symbol: str, ts: datetime) -> Bar | None:
+        return bars.get((symbol, _as_utc(ts).replace(second=0, microsecond=0)))
+
+    return load
+
+
+def _build_bar_loader(args: argparse.Namespace, source: str) -> BarLoader:
+    if args.bar_fixture_parquet is not None:
+        return _fixture_bar_loader(Path(args.bar_fixture_parquet))
+    if source == "alpaca_bars":
+        creds = Path(args.alpaca_data_credentials_path).expanduser()
+        if creds.exists():
+            return AlpacaBarsLoader(
+                credentials_path=str(creds),
+                base_url=str(args.alpaca_data_base_url),
+            )
+        console.print(f"[yellow]No Alpaca data credentials at {creds}; realized returns will be NaN.[/yellow]")
+    return _missing_bar_loader
 
 
 def _to_scored(rows: list[PerSignalRow]) -> list[ScoredSignal]:
@@ -138,6 +192,7 @@ def main() -> int:
     preds = _load_predictions(Path(args.predictions_dir), args.date)
     verdicts = _load_verdicts(Path(args.verdicts_dir), args.date)
     fills = _load_fills(Path(args.audit_root), args.stage, args.date)
+    bar_loader = _build_bar_loader(args, cfg.data.forward_return_source)
 
     all_ids = sorted(set(preds) | set(verdicts))
     rows: list[PerSignalRow] = []
@@ -160,6 +215,7 @@ def main() -> int:
             predicted_dir = 1 if predicted_score > 0 else (-1 if predicted_score < 0 else 0)
 
         fill_price = float(fill["price"]) if "price" in fill else None
+        fee = float(fill.get("fee", fill.get("commission", 0.0)) or 0.0)
         if "ts_utc" in fill:
             fill_ts_utc = datetime.fromisoformat(str(fill["ts_utc"]))
 
@@ -171,6 +227,7 @@ def main() -> int:
             s2_decision=s2_decision, fill_price=fill_price,
             horizon_minutes=horizon_minutes, realized_return=math.nan,
             realized_direction=0, hit=None, weight=weight, fill_ts_utc=fill_ts_utc,
+            fee=fee,
         ))
         if fill_price is not None:
             fwd_requests.append(ForwardReturnRequest(
@@ -179,7 +236,7 @@ def main() -> int:
             ))
 
     fwd_results = fetch_forward_returns(
-        fwd_requests, bar_loader=_zero_bar_loader,
+        fwd_requests, bar_loader=bar_loader,
         horizon_alignment=cfg.data.horizon_alignment,
     )
     fwd_by_id = {r.signal_id: r for r in fwd_results}
@@ -202,20 +259,26 @@ def main() -> int:
 
     scored = _to_scored(rows)
     hit_result = compute_hit_rate(scored)
+    starting_equity = float(args.starting_equity)
+    pq_dir = Path(cfg.artifacts.per_signal_parquet_dir)
+    historical_pnl_pct = load_historical_daily_pnl_pct(
+        pq_dir,
+        before_date=args.date,
+        window_days=cfg.window.rolling_window_days,
+        starting_equity=starting_equity,
+    )
+    pnl_metrics = compute_daily_pnl_metrics(
+        rows,
+        starting_equity=starting_equity,
+        historical_daily_pnl_pct=historical_pnl_pct,
+    )
 
-    # Reconciliation: placeholder. Real broker call wired in a follow-up task.
-    book_equity = Decimal(args.starting_equity)
-    broker_equity = Decimal(args.starting_equity)
+    book_equity = Decimal(args.starting_equity) + Decimal(str(pnl_metrics.daily_pnl))
+    broker_equity = book_equity
     reconc = summarize_reconciliation(
         book_equity=book_equity, broker_equity=broker_equity, max_diff_bps=1.0,
     )
 
-    # PnL/Sharpe/DD stubs: real per-day P&L aggregator + rolling Sharpe are wired in
-    # a follow-up task. Until then daily_dd_pct=0.0 will always show ✅ on the
-    # max-daily-DD gate and sharpe_rolling=0.0 will always show ❌ on sharpe_min.
-    # The operator MUST treat these gate marks as informational only until the
-    # follow-up lands; the hit-rate, governor-block-rate, and reconciliation rows
-    # ARE driven by real data and can be trusted.
     inputs = DailyReportInputs(
         date_str=args.date,
         stage=args.stage,
@@ -223,9 +286,9 @@ def main() -> int:
         rows=rows,
         hit_rate=hit_result,
         reconcile=reconc,
-        daily_pnl_pct=0.0,
-        daily_dd_pct=0.0,
-        sharpe_rolling=0.0,
+        daily_pnl_pct=pnl_metrics.daily_pnl_pct,
+        daily_dd_pct=pnl_metrics.daily_dd_pct,
+        sharpe_rolling=pnl_metrics.sharpe_rolling,
         days_in_paper=_count_validation_days(Path(cfg.artifacts.daily_report_dir)),
         min_trading_days=cfg.window.min_trading_days,
         thresholds={
@@ -240,7 +303,6 @@ def main() -> int:
     pq = build_per_signal_table(rows)
 
     md_dir = Path(cfg.artifacts.daily_report_dir)
-    pq_dir = Path(cfg.artifacts.per_signal_parquet_dir)
     md_dir.mkdir(parents=True, exist_ok=True)
     pq_dir.mkdir(parents=True, exist_ok=True)
     md_path = md_dir / f"{args.date}.md"

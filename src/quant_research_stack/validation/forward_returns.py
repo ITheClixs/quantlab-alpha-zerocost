@@ -1,10 +1,14 @@
 from __future__ import annotations
 
+import json
 import math
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 from typing import Literal
+
+import httpx
 
 
 @dataclass(frozen=True)
@@ -37,6 +41,62 @@ class ForwardReturnResult:
 
 
 BarLoader = Callable[[str, datetime], "Bar | None"]
+
+
+def _load_alpaca_credentials(path: Path | str) -> tuple[str, str]:
+    payload = json.loads(Path(path).expanduser().read_text())
+    return str(payload["api_key"]), str(payload["api_secret"])
+
+
+@dataclass
+class AlpacaBarsLoader:
+    credentials_path: str = "~/.alpaca/paper_keys.json"
+    base_url: str = "https://data.alpaca.markets/v2/stocks/bars"
+    client: httpx.Client | None = None
+
+    def __post_init__(self) -> None:
+        api_key, api_secret = _load_alpaca_credentials(self.credentials_path)
+        self._headers = {"APCA-API-KEY-ID": api_key, "APCA-API-SECRET-KEY": api_secret}
+        self._client = self.client or httpx.Client(timeout=10.0)
+        self._cache: dict[tuple[str, datetime], Bar | None] = {}
+
+    def __call__(self, symbol: str, ts_utc: datetime) -> Bar | None:
+        ts_utc = ts_utc.astimezone(UTC).replace(second=0, microsecond=0)
+        key = (symbol, ts_utc)
+        if key in self._cache:
+            return self._cache[key]
+
+        end = ts_utc + timedelta(minutes=1)
+        response = self._client.get(
+            self.base_url,
+            params={
+                "symbols": symbol,
+                "timeframe": "1Min",
+                "start": ts_utc.isoformat().replace("+00:00", "Z"),
+                "end": end.isoformat().replace("+00:00", "Z"),
+                "limit": 10,
+            },
+            headers=self._headers,
+        )
+        response.raise_for_status()
+        for row in (response.json().get("bars") or {}).get(symbol, []):
+            row_ts = datetime.fromisoformat(str(row["t"]).replace("Z", "+00:00")).astimezone(UTC)
+            if row_ts != ts_utc:
+                continue
+            bar = Bar(
+                symbol=symbol,
+                ts_utc=row_ts,
+                open=float(row["o"]),
+                high=float(row["h"]),
+                low=float(row["l"]),
+                close=float(row["c"]),
+                volume=int(row["v"]),
+            )
+            self._cache[key] = bar
+            return bar
+
+        self._cache[key] = None
+        return None
 
 
 def align_horizon_to_bar(

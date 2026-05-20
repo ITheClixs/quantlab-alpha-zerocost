@@ -30,6 +30,7 @@ def _row(
     hit: bool | None = True,
     weight: float = 1.0,
     fill_ts: datetime | None = None,
+    fee: float = 0.0,
 ) -> PerSignalRow:
     return PerSignalRow(
         signal_id=signal_id, symbol=symbol, predicted_score=predicted_score,
@@ -37,6 +38,7 @@ def _row(
         fill_price=fill_price, horizon_minutes=horizon_minutes,
         realized_return=realized_return, realized_direction=realized_dir, hit=hit,
         weight=weight, fill_ts_utc=fill_ts or datetime(2026, 5, 20, 13, 35, tzinfo=UTC),
+        fee=fee,
     )
 
 
@@ -107,7 +109,7 @@ def test_build_per_signal_table_returns_polars_dataframe_with_expected_schema() 
     expected = {
         "signal_id", "symbol", "predicted_score", "confidence", "predicted_dir",
         "s2_decision", "fill_price", "horizon_minutes", "realized_return",
-        "realized_dir", "hit", "weight", "fill_ts_utc",
+        "realized_dir", "hit", "weight", "fill_ts_utc", "fee",
     }
     assert set(df.columns) == expected
     assert df.height == 3

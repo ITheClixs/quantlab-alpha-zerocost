@@ -17,6 +17,27 @@ through TradingView's chart UI connected to Alpaca paper.
 ## Operator daily workflow
 See `tradingview_paper_setup.md`.
 
+Daily report generation:
+
+```bash
+make tv-validation-report VALIDATION_DATE=<YYYY-MM-DD>
+```
+
+`scripts/tv_validation_report.py` reads S1 predictions, S2 verdicts, S4 fill
+audit logs, and Alpaca 1-minute bars. If `~/.alpaca/paper_keys.json` is not
+available, realized returns are emitted as `NaN` rather than guessed.
+
+For deterministic replay or CI, pass an explicit bar fixture:
+
+```bash
+PYTHONPATH=src uv run python scripts/tv_validation_report.py \
+  --date <YYYY-MM-DD> \
+  --bar-fixture-parquet path/to/bars.parquet
+```
+
+The fixture parquet must contain `symbol`, `ts_utc`, `open`, `high`, `low`,
+`close`, and `volume`.
+
 ## What "signals validated" means
 After 30 trading days, the promotion report at
 `docs/runbooks/paper_to_live_shadow.md` shows all 5 gates green. At that point

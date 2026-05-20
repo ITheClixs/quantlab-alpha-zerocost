@@ -16,6 +16,16 @@
    to spot-check any signal that looked wrong on the TV chart.
 4. Annotate the operator-checklist section of the report with observations.
 
+Before review, generate the report:
+
+```bash
+make tv-validation-report VALIDATION_DATE=<YYYY-MM-DD>
+```
+
+The report uses S4 fills plus Alpaca 1-minute bars to compute realized forward
+returns, hit rate, net daily PnL percentage, daily drawdown percentage, and
+rolling Sharpe from prior `data/validation/*.parquet` files.
+
 ## Limitations
 - TV's chart can lag the broker by 0-2 seconds. Trust the QuantLab audit log
   timestamps for forensic work, not the TV chart visual.
@@ -25,3 +35,6 @@
 - TV is purely a viewer in this setup. Do not place orders manually in TV
   during a paper-validation run; the report will not know about them and the
   reconciliation row will turn red.
+- If Alpaca data credentials are missing, the report still renders but realized
+  returns and PnL gates are incomplete; fix credentials before treating the
+  report as promotion evidence.

@@ -1,10 +1,13 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from pathlib import Path
 
+import httpx
 import pytest
 
 from quant_research_stack.validation.forward_returns import (
+    AlpacaBarsLoader,
     Bar,
     ForwardReturnRequest,
     align_horizon_to_bar,
@@ -121,3 +124,69 @@ def test_fetch_forward_returns_floor_mode_alignment() -> None:
     )
     assert out.realized_return == pytest.approx(0.01, abs=1e-9)
     assert out.realized_direction == 1
+
+
+def test_alpaca_bars_loader_maps_http_response_to_validation_bar(tmp_path: Path) -> None:
+    creds = tmp_path / "alpaca.json"
+    creds.write_text('{"api_key": "key-1", "api_secret": "secret-1"}')
+    requested: dict[str, str] = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requested["api_key"] = request.headers["APCA-API-KEY-ID"]
+        requested["api_secret"] = request.headers["APCA-API-SECRET-KEY"]
+        requested["query"] = str(request.url.query.decode())
+        return httpx.Response(
+            200,
+            json={
+                "bars": {
+                    "AAPL": [
+                        {
+                            "t": "2026-05-20T13:35:00Z",
+                            "o": 100.0,
+                            "h": 101.0,
+                            "l": 99.5,
+                            "c": 100.5,
+                            "v": 12345,
+                        }
+                    ]
+                }
+            },
+        )
+
+    client = httpx.Client(transport=httpx.MockTransport(handler))
+    loader = AlpacaBarsLoader(
+        credentials_path=str(creds),
+        base_url="https://example.test/v2/stocks/bars",
+        client=client,
+    )
+
+    bar = loader("AAPL", datetime(2026, 5, 20, 13, 35, tzinfo=UTC))
+
+    assert bar == Bar(
+        symbol="AAPL",
+        ts_utc=datetime(2026, 5, 20, 13, 35, tzinfo=UTC),
+        open=100.0,
+        high=101.0,
+        low=99.5,
+        close=100.5,
+        volume=12345,
+    )
+    assert requested["api_key"] == "key-1"
+    assert requested["api_secret"] == "secret-1"
+    assert "symbols=AAPL" in requested["query"]
+    assert "timeframe=1Min" in requested["query"]
+
+
+def test_alpaca_bars_loader_returns_none_when_exact_bar_missing(tmp_path: Path) -> None:
+    creds = tmp_path / "alpaca.json"
+    creds.write_text('{"api_key": "key-1", "api_secret": "secret-1"}')
+    client = httpx.Client(
+        transport=httpx.MockTransport(lambda _request: httpx.Response(200, json={"bars": {"AAPL": []}}))
+    )
+    loader = AlpacaBarsLoader(
+        credentials_path=str(creds),
+        base_url="https://example.test/v2/stocks/bars",
+        client=client,
+    )
+
+    assert loader("AAPL", datetime(2026, 5, 20, 13, 35, tzinfo=UTC)) is None

@@ -20,6 +20,7 @@ def test_report_produced_for_synthetic_day(tmp_path: Path) -> None:
     audit_root = tmp_path / "audit"
     md_dir = tmp_path / "md"
     pq_dir = tmp_path / "pq"
+    bars_path = tmp_path / "bars.parquet"
     preds_dir.mkdir()
     verdicts_dir.mkdir()
     (audit_root / "paper").mkdir(parents=True)
@@ -53,6 +54,19 @@ def test_report_produced_for_synthetic_day(tmp_path: Path) -> None:
             "timestamp_utc": datetime.now(UTC).isoformat(),
         }) + "\n")
 
+    pl.DataFrame({
+        "symbol": ["AAPL", "AAPL"],
+        "ts_utc": [
+            datetime(2026, 5, 20, 13, 35, tzinfo=UTC),
+            datetime(2026, 5, 20, 13, 40, tzinfo=UTC),
+        ],
+        "open": [100.0, 101.0],
+        "high": [100.0, 101.0],
+        "low": [100.0, 101.0],
+        "close": [100.0, 101.0],
+        "volume": [1000, 1200],
+    }).write_parquet(bars_path)
+
     cfg = tmp_path / "validation.yaml"
     cfg.write_text(
         f"window:\n"
@@ -79,7 +93,9 @@ def test_report_produced_for_synthetic_day(tmp_path: Path) -> None:
          "--predictions-dir", str(preds_dir),
          "--verdicts-dir", str(verdicts_dir),
          "--audit-root", str(audit_root),
-         "--stage", "paper"],
+         "--stage", "paper",
+         "--starting-equity", "100",
+         "--bar-fixture-parquet", str(bars_path)],
         env=env, check=False, capture_output=True, text=True,
     )
     assert rc.returncode == 0, rc.stderr
@@ -90,7 +106,11 @@ def test_report_produced_for_synthetic_day(tmp_path: Path) -> None:
     md = md_path.read_text()
     assert "QuantLab paper validation" in md
     assert "## Headline" in md
+    assert "daily_pnl_pct: +0.01" in md
     assert "## Per-signal table" in md
     df = pl.read_parquet(pq_path)
     assert df.height == 1
     assert df["signal_id"].to_list() == ["sig-int-0001"]
+    assert df["realized_return"].to_list() == [0.01]
+    assert df["hit"].to_list() == [True]
+    assert df["fee"].to_list() == [0.0]
