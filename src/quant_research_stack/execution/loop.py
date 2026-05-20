@@ -124,7 +124,8 @@ class S4Loop:
             gross_exposure_notional=gross,
             per_symbol_notional=per_sym,
             orders_last_minute=len(self._orders_last_minute),
-            last_tick_ts={sym: now},
+            # TODO(S4.1): replace with real feed heartbeat from S3 once wired through
+            last_tick_ts={sym: ticket.signal.ts_utc},
             kill_flag_path=Path(self._exec_cfg.kill_switch.repo_root_marker),
             is_crypto=self._is_crypto,
             now=now,
