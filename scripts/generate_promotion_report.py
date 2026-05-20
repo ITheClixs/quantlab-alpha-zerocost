@@ -98,10 +98,11 @@ def build_report(
                 (pl.col("predicted_dir") != 0) & (pl.col("weight") > 0)
             )
             if eligible.height > 0:
+                eligible_with_hit = eligible.filter(pl.col("hit").is_not_null())
                 weighted_num = float(
-                    eligible.filter(pl.col("hit")).select(pl.col("weight").sum()).item()
+                    eligible_with_hit.filter(pl.col("hit")).select(pl.col("weight").sum()).item()
                 )
-                weighted_den = float(eligible.select(pl.col("weight").sum()).item())
+                weighted_den = float(eligible_with_hit.select(pl.col("weight").sum()).item())
                 observed = weighted_num / weighted_den if weighted_den > 0 else 0.0
                 gates.append({
                     "name": "hit_rate_min",
