@@ -50,8 +50,8 @@ def permanent_holdout_split(df: pl.DataFrame, config: LoadConfig) -> tuple[pl.Da
     cut = int(round(n * (1 - config.holdout_fraction)))
     if cut == 0 or cut == n:
         raise ValueError(f"holdout split degenerate: cut={cut}, n_groups={n}")
-    train_groups = unique_groups.head(cut)
-    holdout_groups = unique_groups.tail(n - cut)
+    train_groups = unique_groups.head(cut).to_list()
+    holdout_groups = unique_groups.tail(n - cut).to_list()
     train = df.filter(pl.col(config.group_column).is_in(train_groups))
     holdout = df.filter(pl.col(config.group_column).is_in(holdout_groups))
     return train, holdout
