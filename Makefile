@@ -104,3 +104,12 @@ s4-audit-replay:
 
 s4-smoke:
 	$(PY) pytest tests/integration/test_s4_*.py -v -m s4_integration
+
+TV_VALIDATION_REPORT := scripts/tv_validation_report.py
+VALIDATION_DATE ?= $(shell date -u +%Y-%m-%d)
+
+.PHONY: tv-validation-report
+
+tv-validation-report:
+	$(PY) python $(TV_VALIDATION_REPORT) --date $(VALIDATION_DATE) \
+	  --config configs/validation.yaml --stage paper
