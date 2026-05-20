@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import asyncio
+import contextlib
 from collections.abc import Callable
 from datetime import UTC, datetime
 from decimal import Decimal
@@ -54,15 +56,41 @@ class S4Loop:
             audit=audit,
         )
         self._orders_last_minute: list[datetime] = []
+        self._fill_consumer_task: asyncio.Task[None] | None = None
+
+    async def _consume_fills(self) -> None:
+        async for fill in self._broker.stream_fills():
+            self._book.apply_fill(fill)
+            self._audit.append(
+                "trade_fill",
+                {
+                    "order_id": fill.fill_id,
+                    "client_order_id": fill.client_order_id,
+                    "symbol": fill.symbol,
+                    "side": fill.side.value,
+                    "qty": float(fill.quantity),
+                    "price": float(fill.price),
+                    "fee": float(fill.commission),
+                    "ts_utc": fill.timestamp_utc.isoformat(),
+                },
+            )
 
     async def run(self, max_tickets: int | None = None) -> None:
-        processed = 0
-        async for ticket in self._ingestor.stream():
-            await self._handle(ticket)
-            processed += 1
-            if max_tickets is not None and processed >= max_tickets:
-                self._ingestor.stop()
-                return
+        self._fill_consumer_task = asyncio.create_task(self._consume_fills())
+        try:
+            processed = 0
+            async for ticket in self._ingestor.stream():
+                await self._handle(ticket)
+                processed += 1
+                if max_tickets is not None and processed >= max_tickets:
+                    self._ingestor.stop()
+                    return
+        finally:
+            if self._fill_consumer_task is not None:
+                self._fill_consumer_task.cancel()
+                with contextlib.suppress(asyncio.CancelledError):
+                    await self._fill_consumer_task
+                self._fill_consumer_task = None
 
     async def _handle(self, ticket: ExecutionTicket) -> None:
         sym = ticket.signal.symbol
@@ -72,8 +100,9 @@ class S4Loop:
         mid = self._mid_lookup(sym)
         per_sym = self._book.per_symbol_notional({sym: mid})
         gross = self._book.gross_exposure({sym: mid})
+        eq = float(self._starting_equity) + float(self._book.daily_realized_pnl)
         state = RiskState(
-            account_equity=float(self._starting_equity),
+            account_equity=eq,
             peak_equity=float(self._book.peak_equity),
             daily_realized_pnl=float(self._book.daily_realized_pnl),
             gross_exposure_notional=gross,
@@ -95,7 +124,7 @@ class S4Loop:
         qty = self._sizer.size(
             SizerInput(
                 ticket=ticket,
-                account_equity=float(self._starting_equity),
+                account_equity=eq,
                 mid_price=float(mid),
                 lot_size=0.0001,
             )
