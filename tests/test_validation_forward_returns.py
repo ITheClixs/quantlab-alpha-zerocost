@@ -98,3 +98,26 @@ def test_fetch_forward_returns_negative_return_direction_minus_one() -> None:
     )
     assert out.realized_return == pytest.approx(-0.01, abs=1e-9)
     assert out.realized_direction == -1
+
+
+def test_fetch_forward_returns_floor_mode_alignment() -> None:
+    """End-to-end: floor_to_next_bar must use the bar BEFORE fill_ts+horizon."""
+    fill_ts = datetime(2026, 5, 20, 13, 35, 42, tzinfo=UTC)  # 42 seconds past 13:35
+    floor_horizon_ts = datetime(2026, 5, 20, 13, 40, 0, tzinfo=UTC)
+    entry_ts = datetime(2026, 5, 20, 13, 35, 0, tzinfo=UTC)
+    fixture_bars = {
+        ("AAPL", entry_ts): _bar(entry_ts, close=100.0),
+        ("AAPL", floor_horizon_ts): _bar(floor_horizon_ts, close=101.0),
+    }
+
+    def stub_loader(symbol: str, ts: datetime) -> Bar | None:
+        return fixture_bars.get((symbol, ts))
+
+    req = ForwardReturnRequest(
+        signal_id="sig-floor", symbol="AAPL", fill_ts_utc=fill_ts, horizon_minutes=5,
+    )
+    [out] = fetch_forward_returns(
+        [req], bar_loader=stub_loader, horizon_alignment="floor_to_next_bar",
+    )
+    assert out.realized_return == pytest.approx(0.01, abs=1e-9)
+    assert out.realized_direction == 1
