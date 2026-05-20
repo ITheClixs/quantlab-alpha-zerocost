@@ -76,6 +76,7 @@ async def test_paper_smoke_emits_trade_placed(tmp_path: Path) -> None:
         starting_equity=Decimal("100000"),
         mid_price_lookup=lambda _s: Decimal("50000"),
         is_crypto=lambda _s: True,
+        feed_heartbeat_lookup=lambda _s: datetime.now(UTC),
     )
     _write_pred(Path(exec_cfg.ingest.s1_predictions_dir), "sig-smk00001")
     _write_verdict(Path(exec_cfg.ingest.s2_verdicts_dir), "sig-smk00001")

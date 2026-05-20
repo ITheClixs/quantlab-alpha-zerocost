@@ -23,6 +23,7 @@ from quant_research_stack.execution.configs import load_exec_config, load_risk_c
 from quant_research_stack.execution.kill_switch import KillSwitchWatcher
 from quant_research_stack.execution.loop import S4Loop
 from quant_research_stack.execution.router import BrokerRouter
+from quant_research_stack.feeds.heartbeat import RecordedFeedHeartbeat
 
 console = Console()
 
@@ -34,6 +35,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--brokers-config", default="configs/brokers.yaml")
     parser.add_argument("--asset-class", choices=["equity", "crypto"], required=True)
     parser.add_argument("--starting-equity", type=Decimal, required=True)
+    parser.add_argument("--feed-recording-root", default="data/live/parquet")
     parser.add_argument("--max-tickets", type=int, default=None, help="Stop after N tickets (testing)")
     return parser.parse_args()
 
@@ -67,6 +69,7 @@ async def main_async() -> int:
     )
     router = BrokerRouter(brokers_cfg)
     broker = router.resolve(stage, asset_class=args.asset_class)
+    heartbeat = RecordedFeedHeartbeat(Path(args.feed_recording_root))
 
     loop = S4Loop(
         stage=stage,
@@ -77,6 +80,7 @@ async def main_async() -> int:
         starting_equity=args.starting_equity,
         mid_price_lookup=_mid_lookup_stub,
         is_crypto=_is_crypto_fn,
+        feed_heartbeat_lookup=heartbeat.last_tick_ts,
     )
 
     flag_path = Path(exec_cfg.kill_switch.repo_root_marker)

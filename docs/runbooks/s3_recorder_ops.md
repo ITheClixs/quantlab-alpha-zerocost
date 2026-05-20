@@ -15,6 +15,11 @@ The recorder:
 - Chmods each hour file read-only when it rotates.
 - Logs flush latency + dropped count every minute.
 
+S4 reads the latest `timestamp_utc` for each symbol from the same recorder root
+through `RecordedFeedHeartbeat`. Start S3 before S4, or pass
+`--feed-recording-root <root>` to `scripts/s4_execute.py` if the recorder writes
+somewhere other than `data/live/parquet`.
+
 ## Stop the recorder
 Send SIGTERM:
 ```bash
@@ -41,6 +46,7 @@ find data/live/parquet -mindepth 4 -maxdepth 4 -name "*.parquet" -mtime +30 -del
   and continues with other adapters. The failed adapter is restarted on the next
   hour rotation.
 - Disk full: the recorder logs and drops events. The dropped_count stat surfaces
-  the loss; S4 will wire this to the kill switch.
+  the loss; if no fresh parquet events arrive, S4's feed-freshness gate blocks
+  new orders.
 - Schema drift: the parser tests catch this in CI before the recorder ever sees a
   malformed event.

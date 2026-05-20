@@ -12,6 +12,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import asyncio
 import json
 import math
 import sys
@@ -23,6 +24,7 @@ from typing import Any
 import polars as pl
 from rich.console import Console
 
+from quant_research_stack.brokers.alpaca_paper import AlpacaPaper
 from quant_research_stack.validation import load_validation_config
 from quant_research_stack.validation.daily_report import (
     DailyReportInputs,
@@ -63,6 +65,9 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--bar-fixture-parquet", default=None)
     p.add_argument("--alpaca-data-credentials-path", default="~/.alpaca/paper_keys.json")
     p.add_argument("--alpaca-data-base-url", default="https://data.alpaca.markets/v2/stocks/bars")
+    p.add_argument("--broker-equity-fixture", default=None)
+    p.add_argument("--alpaca-broker-credentials-path", default="~/.alpaca/paper_keys.json")
+    p.add_argument("--alpaca-broker-base-url", default="https://paper-api.alpaca.markets")
     return p.parse_args()
 
 
@@ -185,6 +190,40 @@ def _count_validation_days(daily_report_dir: Path) -> int:
     return sum(1 for p in daily_report_dir.glob("*.md") if p.stem.count("-") == 2)
 
 
+async def _fetch_alpaca_paper_equity(credentials_path: str, base_url: str) -> Decimal:
+    broker = AlpacaPaper(credentials_path=credentials_path, base_url=base_url)
+    try:
+        account = await broker.account()
+        return Decimal(str(account.equity))
+    finally:
+        await broker.close()
+
+
+def _resolve_broker_equity(args: argparse.Namespace, book_equity: Decimal) -> Decimal:
+    if args.broker_equity_fixture is not None:
+        return Decimal(str(args.broker_equity_fixture))
+    creds = Path(args.alpaca_broker_credentials_path).expanduser()
+    if args.stage == "paper" and creds.exists():
+        try:
+            return asyncio.run(
+                _fetch_alpaca_paper_equity(
+                    credentials_path=str(creds),
+                    base_url=str(args.alpaca_broker_base_url),
+                )
+            )
+        except Exception as exc:  # noqa: BLE001
+            console.print(
+                f"[yellow]Could not fetch Alpaca paper account equity ({exc}); "
+                "using QuantLab book equity for reconciliation.[/yellow]"
+            )
+            return book_equity
+    console.print(
+        f"[yellow]No Alpaca broker credentials at {creds}; "
+        "using QuantLab book equity for reconciliation.[/yellow]"
+    )
+    return book_equity
+
+
 def main() -> int:
     args = parse_args()
     cfg = load_validation_config(Path(args.config))
@@ -274,7 +313,7 @@ def main() -> int:
     )
 
     book_equity = Decimal(args.starting_equity) + Decimal(str(pnl_metrics.daily_pnl))
-    broker_equity = book_equity
+    broker_equity = _resolve_broker_equity(args, book_equity)
     reconc = summarize_reconciliation(
         book_equity=book_equity, broker_equity=broker_equity, max_diff_bps=1.0,
     )

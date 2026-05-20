@@ -22,9 +22,10 @@ Before review, generate the report:
 make tv-validation-report VALIDATION_DATE=<YYYY-MM-DD>
 ```
 
-The report uses S4 fills plus Alpaca 1-minute bars to compute realized forward
-returns, hit rate, net daily PnL percentage, daily drawdown percentage, and
-rolling Sharpe from prior `data/validation/*.parquet` files.
+The report uses S4 fills, Alpaca 1-minute bars, and Alpaca paper account equity
+to compute realized forward returns, hit rate, net daily PnL percentage, daily
+drawdown percentage, rolling Sharpe from prior `data/validation/*.parquet`
+files, and book-vs-broker reconciliation.
 
 ## Limitations
 - TV's chart can lag the broker by 0-2 seconds. Trust the QuantLab audit log
@@ -36,5 +37,5 @@ rolling Sharpe from prior `data/validation/*.parquet` files.
   during a paper-validation run; the report will not know about them and the
   reconciliation row will turn red.
 - If Alpaca data credentials are missing, the report still renders but realized
-  returns and PnL gates are incomplete; fix credentials before treating the
-  report as promotion evidence.
+  returns, PnL gates, and broker reconciliation are incomplete; fix credentials
+  before treating the report as promotion evidence.

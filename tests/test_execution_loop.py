@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
 
@@ -76,6 +76,7 @@ async def test_loop_processes_one_signal_end_to_end(tmp_path: Path) -> None:
         starting_equity=Decimal("100000"),
         mid_price_lookup=lambda _s: Decimal("50000"),
         is_crypto=lambda _s: True,
+        feed_heartbeat_lookup=lambda _s: datetime.now(UTC),
         tier3_stance_pct=0.20,
     )
 
@@ -93,3 +94,55 @@ async def test_loop_processes_one_signal_end_to_end(tmp_path: Path) -> None:
                 events.append(json.loads(line)["event"])
     assert "signal_ingested" in events
     assert "trade_placed" in events
+
+
+@pytest.mark.asyncio
+async def test_loop_blocks_when_feed_heartbeat_is_stale(tmp_path: Path) -> None:
+    risk_cfg = load_risk_config(Path("configs/risk.yaml"))
+    exec_cfg = ExecConfig.model_validate({
+        "ingest": {
+            "s1_predictions_dir": str(tmp_path / "preds"),
+            "s2_verdicts_dir": str(tmp_path / "verdicts"),
+            "poll_interval_seconds": 0.05,
+            "pair_window_seconds": 5,
+        },
+        "position_book": {"snapshot_root": str(tmp_path / "positions"), "snapshot_interval_seconds": 60},
+        "audit": {"root": str(tmp_path / "audit"), "rotation": "daily", "chmod_after_close": False},
+        "kill_switch": {
+            "repo_root_marker": str(tmp_path / "KILL_TRADING_NEVER"),
+            "poll_interval_seconds": 0.05,
+            "emergency_snapshot_root": str(tmp_path / "snaps"),
+        },
+    })
+    audit = AuditLog(root=Path(exec_cfg.audit.root), chmod_after_close=False)
+    broker = NullBroker(fill_model=FillModel(FillModelConfig()))
+    loop = S4Loop(
+        stage="paper",
+        risk_cfg=risk_cfg,
+        exec_cfg=exec_cfg,
+        broker=broker,
+        audit=audit,
+        starting_equity=Decimal("100000"),
+        mid_price_lookup=lambda _s: Decimal("50000"),
+        is_crypto=lambda _s: True,
+        feed_heartbeat_lookup=lambda _s: datetime.now(UTC)
+        - timedelta(seconds=risk_cfg.freshness.crypto_max_gap_seconds + 1),
+        tier3_stance_pct=0.20,
+    )
+
+    _write_pred(Path(exec_cfg.ingest.s1_predictions_dir), "sig-00004444")
+    _write_verdict(Path(exec_cfg.ingest.s2_verdicts_dir), "sig-00004444")
+
+    task = asyncio.create_task(loop.run(max_tickets=1))
+    await asyncio.wait_for(task, timeout=5.0)
+
+    audit.close_current()
+    records = []
+    for p in Path(exec_cfg.audit.root).iterdir():
+        for line in p.read_text().splitlines():
+            if line.strip():
+                records.append(json.loads(line))
+    assert "trade_placed" not in [r["event"] for r in records]
+    blocked = [r for r in records if r["event"] == "risk_blocked"]
+    assert blocked
+    assert blocked[0]["payload"]["gate_name"] == "feed_freshness_check"

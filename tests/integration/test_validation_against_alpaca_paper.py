@@ -95,7 +95,8 @@ def test_report_produced_for_synthetic_day(tmp_path: Path) -> None:
          "--audit-root", str(audit_root),
          "--stage", "paper",
          "--starting-equity", "100",
-         "--bar-fixture-parquet", str(bars_path)],
+         "--bar-fixture-parquet", str(bars_path),
+         "--broker-equity-fixture", "100"],
         env=env, check=False, capture_output=True, text=True,
     )
     assert rc.returncode == 0, rc.stderr
@@ -107,6 +108,9 @@ def test_report_produced_for_synthetic_day(tmp_path: Path) -> None:
     assert "QuantLab paper validation" in md
     assert "## Headline" in md
     assert "daily_pnl_pct: +0.01" in md
+    assert "QuantLab book equity:    101.0" in md
+    assert "Alpaca paper equity:     100" in md
+    assert "Diff bps:                100.00" in md
     assert "## Per-signal table" in md
     df = pl.read_parquet(pq_path)
     assert df.height == 1

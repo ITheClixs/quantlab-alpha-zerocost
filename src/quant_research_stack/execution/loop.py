@@ -31,6 +31,7 @@ class S4Loop:
         starting_equity: Decimal,
         mid_price_lookup: Callable[[str], Decimal],
         is_crypto: Callable[[str], bool],
+        feed_heartbeat_lookup: Callable[[str], datetime | None] | None = None,
         tier3_stance_pct: float = 0.20,
     ) -> None:
         self._stage = stage
@@ -40,6 +41,7 @@ class S4Loop:
         self._audit = audit
         self._mid_lookup = mid_price_lookup
         self._is_crypto = is_crypto
+        self._feed_heartbeat_lookup = feed_heartbeat_lookup or (lambda _sym: None)
         self._starting_equity = starting_equity
         self._book = PositionBook(
             snapshot_root=Path(exec_cfg.position_book.snapshot_root),
@@ -117,6 +119,7 @@ class S4Loop:
         per_sym = self._book.per_symbol_notional({sym: mid})
         gross = self._book.gross_exposure({sym: mid})
         eq = float(self._starting_equity) + float(self._book.daily_realized_pnl)
+        last_tick = self._feed_heartbeat_lookup(sym)
         state = RiskState(
             account_equity=eq,
             peak_equity=float(self._book.peak_equity),
@@ -124,8 +127,7 @@ class S4Loop:
             gross_exposure_notional=gross,
             per_symbol_notional=per_sym,
             orders_last_minute=len(self._orders_last_minute),
-            # TODO(S4.1): replace with real feed heartbeat from S3 once wired through
-            last_tick_ts={sym: ticket.signal.ts_utc},
+            last_tick_ts={sym: last_tick} if last_tick is not None else {},
             kill_flag_path=Path(self._exec_cfg.kill_switch.repo_root_marker),
             is_crypto=self._is_crypto,
             now=now,

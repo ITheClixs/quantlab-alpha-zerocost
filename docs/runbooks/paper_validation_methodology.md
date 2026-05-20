@@ -24,8 +24,10 @@ make tv-validation-report VALIDATION_DATE=<YYYY-MM-DD>
 ```
 
 `scripts/tv_validation_report.py` reads S1 predictions, S2 verdicts, S4 fill
-audit logs, and Alpaca 1-minute bars. If `~/.alpaca/paper_keys.json` is not
-available, realized returns are emitted as `NaN` rather than guessed.
+audit logs, Alpaca 1-minute bars, and Alpaca paper account equity. If
+`~/.alpaca/paper_keys.json` is not available, realized returns are emitted as
+`NaN` rather than guessed, and reconciliation falls back to QuantLab book equity
+with a warning.
 
 For deterministic replay or CI, pass an explicit bar fixture:
 
@@ -37,6 +39,9 @@ PYTHONPATH=src uv run python scripts/tv_validation_report.py \
 
 The fixture parquet must contain `symbol`, `ts_utc`, `open`, `high`, `low`,
 `close`, and `volume`.
+
+CI-only reconciliation fixtures can pass `--broker-equity-fixture <equity>` to
+avoid hitting Alpaca while still testing book-vs-broker divergence behavior.
 
 ## What "signals validated" means
 After 30 trading days, the promotion report at
