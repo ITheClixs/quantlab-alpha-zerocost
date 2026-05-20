@@ -9,6 +9,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+import polars as pl
+
 from quant_research_stack.execution.configs import load_promotion_config
 
 
@@ -40,6 +42,8 @@ def build_report(
     promotion_config_path: Path,
     audit_root: Path,
     s1_metrics_path: Path | None,
+    validation_parquet_dir: Path | None = None,
+    validation_config_path: Path | None = None,
 ) -> dict[str, Any]:
     cfg = load_promotion_config(promotion_config_path)
     gate_row = cfg.paper_to_live_shadow if from_stage == "paper" else cfg.live_shadow_to_live
@@ -78,6 +82,33 @@ def build_report(
             "observed": r2,
             "passed": r2 >= 0.012,
         })
+
+    # S4.1α: hit-rate gate from validation parquets (kept out of configs/promotion.yaml
+    # to avoid triggering CLAUDE.md §1.13's two-person-review requirement).
+    if validation_parquet_dir is not None and validation_config_path is not None:
+        from quant_research_stack.validation import load_validation_config
+
+        vcfg = load_validation_config(validation_config_path)
+        files = sorted(validation_parquet_dir.glob("*.parquet"))
+        last_n = files[-vcfg.window.min_trading_days:]
+        if last_n:
+            frames = [pl.read_parquet(p) for p in last_n]
+            full = pl.concat(frames, how="diagonal")
+            eligible = full.filter(
+                (pl.col("predicted_dir") != 0) & (pl.col("weight") > 0)
+            )
+            if eligible.height > 0:
+                weighted_num = float(
+                    eligible.filter(pl.col("hit")).select(pl.col("weight").sum()).item()
+                )
+                weighted_den = float(eligible.select(pl.col("weight").sum()).item())
+                observed = weighted_num / weighted_den if weighted_den > 0 else 0.0
+                gates.append({
+                    "name": "hit_rate_min",
+                    "required": vcfg.thresholds.hit_rate_min,
+                    "observed": observed,
+                    "passed": observed >= vcfg.thresholds.hit_rate_min,
+                })
 
     return {
         "from_stage": from_stage,
@@ -118,6 +149,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--audit-root", required=True)
     parser.add_argument("--s1-metrics", default=None)
     parser.add_argument("--out", default=None)
+    parser.add_argument("--validation-parquet-dir", default=None)
+    parser.add_argument("--validation-config", default="configs/validation.yaml")
     return parser.parse_args()
 
 
@@ -129,6 +162,8 @@ def main() -> int:
         promotion_config_path=Path(args.promotion_config),
         audit_root=Path(args.audit_root),
         s1_metrics_path=Path(args.s1_metrics) if args.s1_metrics else None,
+        validation_parquet_dir=Path(args.validation_parquet_dir) if args.validation_parquet_dir else None,
+        validation_config_path=Path(args.validation_config) if args.validation_config else None,
     )
     markdown = render_markdown(report)
     out = Path(args.out) if args.out else Path(f"docs/runbooks/{args.from_stage}_to_{args.to_stage}.md")
