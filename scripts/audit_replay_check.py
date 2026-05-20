@@ -29,7 +29,7 @@ def replay_audit_to_book(audit_dir: Path, book: PositionBook) -> int:
             payload = rec["payload"]
             fill = Fill(
                 client_order_id=payload["client_order_id"],
-                fill_id=str(payload.get("fill_id", payload.get("order_id", payload["client_order_id"]))),
+                fill_id=str(payload["fill_id"]),
                 symbol=payload["symbol"],
                 side=OrderSide(payload["side"]),
                 price=float(payload["price"]),

@@ -77,7 +77,7 @@ class S4Loop:
             self._audit.append(
                 "trade_fill",
                 {
-                    "order_id": fill.fill_id,
+                    "fill_id": fill.fill_id,
                     "client_order_id": fill.client_order_id,
                     "symbol": fill.symbol,
                     "side": fill.side.value,

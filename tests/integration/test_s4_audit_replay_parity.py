@@ -19,7 +19,7 @@ def test_replay_reconstructs_same_position_book(tmp_path: Path) -> None:
         "event": "trade_fill",
         "not_investment_advice": True,
         "payload": {
-            "order_id": "o-1",
+            "fill_id": "f-1",
             "client_order_id": "c-1",
             "symbol": "BTCUSDT",
             "side": "buy",
