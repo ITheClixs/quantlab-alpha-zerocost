@@ -210,6 +210,12 @@ def main() -> int:
         book_equity=book_equity, broker_equity=broker_equity, max_diff_bps=1.0,
     )
 
+    # PnL/Sharpe/DD stubs: real per-day P&L aggregator + rolling Sharpe are wired in
+    # a follow-up task. Until then daily_dd_pct=0.0 will always show ✅ on the
+    # max-daily-DD gate and sharpe_rolling=0.0 will always show ❌ on sharpe_min.
+    # The operator MUST treat these gate marks as informational only until the
+    # follow-up lands; the hit-rate, governor-block-rate, and reconciliation rows
+    # ARE driven by real data and can be trusted.
     inputs = DailyReportInputs(
         date_str=args.date,
         stage=args.stage,
