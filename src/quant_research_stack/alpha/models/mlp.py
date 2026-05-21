@@ -1,10 +1,12 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
+from pathlib import Path
 
 import numpy as np
 import torch
 from numpy.typing import NDArray
+from sklearn.preprocessing import StandardScaler
 from torch import nn
 from torch.utils.data import DataLoader, TensorDataset
 
@@ -67,6 +69,8 @@ class MLPAlphaModel:
         _configure_torch_cpu_threads()
         self._net: _Net | None = None
         self._device = _resolve_device(config.device)
+        self._scaler: StandardScaler | None = None
+        self._input_dim: int | None = None
         torch.manual_seed(config.random_state)
 
     def fit(
@@ -78,16 +82,22 @@ class MLPAlphaModel:
         y_val: NDArray[np.float64],
         w_val: NDArray[np.float64],
     ) -> None:
-        in_dim = x_train.shape[1]
-        self._net = _Net(in_dim, list(self.config.hidden_dims), self.config.dropout).to(self._device)
+        self._input_dim = x_train.shape[1]
+
+        # Fit scaler on training data only; apply to both train and val.
+        self._scaler = StandardScaler()
+        x_train_scaled = self._scaler.fit_transform(x_train.astype(np.float64)).astype(np.float32)
+        x_val_scaled = self._scaler.transform(x_val.astype(np.float64)).astype(np.float32)
+
+        self._net = _Net(self._input_dim, list(self.config.hidden_dims), self.config.dropout).to(self._device)
         opt = torch.optim.Adam(self._net.parameters(), lr=self.config.learning_rate)
         train_ds = TensorDataset(
-            torch.tensor(x_train, dtype=torch.float32),
+            torch.tensor(x_train_scaled, dtype=torch.float32),
             torch.tensor(y_train, dtype=torch.float32),
             torch.tensor(w_train, dtype=torch.float32),
         )
         train_loader = DataLoader(train_ds, batch_size=self.config.batch_size, shuffle=True)
-        val_x = torch.tensor(x_val, dtype=torch.float32).to(self._device)
+        val_x = torch.tensor(x_val_scaled, dtype=torch.float32).to(self._device)
         val_y = torch.tensor(y_val, dtype=torch.float32).to(self._device)
         val_w = torch.tensor(w_val, dtype=torch.float32).to(self._device)
         best_val = float("inf")
@@ -118,7 +128,51 @@ class MLPAlphaModel:
     def predict(self, x: NDArray[np.float64]) -> NDArray[np.float64]:
         if self._net is None:
             raise RuntimeError("call fit() first")
+        if self._scaler is None:
+            raise RuntimeError("call fit() first")
+        x_scaled = self._scaler.transform(np.asarray(x, dtype=np.float64)).astype(np.float32)
         self._net.eval()
         with torch.no_grad():
-            out = self._net(torch.tensor(x, dtype=torch.float32).to(self._device))
+            out = self._net(torch.tensor(x_scaled, dtype=torch.float32).to(self._device))
         return out.detach().cpu().numpy().astype(np.float64)
+
+    def save(self, path: Path) -> None:
+        path = Path(path)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        if self._net is None or self._scaler is None or self._input_dim is None:
+            raise RuntimeError("cannot save un-fitted MLPAlphaModel")
+        payload = {
+            "state_dict": self._net.state_dict(),
+            "arch": {
+                "input_dim": int(self._input_dim),
+                "hidden_dims": list(self.config.hidden_dims),
+                "dropout": float(self.config.dropout),
+            },
+            "scaler": {
+                "mean": np.asarray(self._scaler.mean_, dtype=np.float64).tolist(),
+                "scale": np.asarray(self._scaler.scale_, dtype=np.float64).tolist(),
+            },
+            "config": asdict(self.config),
+        }
+        torch.save(payload, str(path))
+
+    @classmethod
+    def load(cls, path: Path) -> "MLPAlphaModel":
+        path = Path(path)
+        payload = torch.load(str(path), map_location="cpu", weights_only=False)
+        inst = cls(MLPConfig(**payload["config"]))
+        inst._input_dim = payload["arch"]["input_dim"]
+        inst._net = _Net(
+            in_dim=payload["arch"]["input_dim"],
+            hidden=payload["arch"]["hidden_dims"],
+            dropout=payload["arch"]["dropout"],
+        )
+        inst._net.load_state_dict(payload["state_dict"])
+        inst._net.eval()
+        inst._device = torch.device("cpu")
+        inst._scaler = StandardScaler()
+        inst._scaler.mean_ = np.asarray(payload["scaler"]["mean"], dtype=np.float64)
+        inst._scaler.scale_ = np.asarray(payload["scaler"]["scale"], dtype=np.float64)
+        inst._scaler.var_ = inst._scaler.scale_ ** 2
+        inst._scaler.n_features_in_ = inst._scaler.mean_.size
+        return inst
