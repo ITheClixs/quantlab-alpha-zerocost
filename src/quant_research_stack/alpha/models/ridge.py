@@ -1,7 +1,9 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
+from pathlib import Path
 
+import joblib
 import numpy as np
 from numpy.typing import NDArray
 from sklearn.linear_model import Ridge
@@ -24,3 +26,19 @@ class RidgeAlphaModel:
 
     def predict(self, x: NDArray[np.float64]) -> NDArray[np.float64]:
         return np.asarray(self._estimator.predict(x), dtype=np.float64)
+
+    def save(self, path: Path) -> None:
+        path = Path(path)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        joblib.dump(
+            {"sklearn_estimator": self._estimator, "config": asdict(self.config)},
+            path,
+        )
+
+    @classmethod
+    def load(cls, path: Path) -> RidgeAlphaModel:
+        path = Path(path)
+        payload = joblib.load(path)
+        inst = cls(RidgeConfig(**payload["config"]))
+        inst._estimator = payload["sklearn_estimator"]
+        return inst
