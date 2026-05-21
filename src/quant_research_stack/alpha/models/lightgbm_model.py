@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+import json
+from dataclasses import asdict, dataclass
+from pathlib import Path
 
 import lightgbm as lgb
 import numpy as np
@@ -63,3 +65,23 @@ class LightGBMAlphaModel:
         if self._booster is None:
             raise RuntimeError("call fit() first")
         return np.asarray(self._booster.feature_importance(importance_type="gain"), dtype=np.float64)
+
+    def save(self, path: Path) -> None:
+        path = Path(path)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        if self._booster is None:
+            raise RuntimeError("cannot save un-fitted LightGBMAlphaModel")
+        self._booster.save_model(str(path))
+        sidecar = path.parent / f"{path.stem}.config.json"
+        sidecar.write_text(json.dumps(asdict(self.config), indent=2, sort_keys=True))
+
+    @classmethod
+    def load(cls, path: Path) -> LightGBMAlphaModel:
+        path = Path(path)
+        sidecar = path.parent / f"{path.stem}.config.json"
+        if not sidecar.exists():
+            raise FileNotFoundError(f"missing sidecar config: {sidecar}")
+        cfg_dict = json.loads(sidecar.read_text())
+        inst = cls(LightGBMConfig(**cfg_dict))
+        inst._booster = lgb.Booster(model_file=str(path))
+        return inst
