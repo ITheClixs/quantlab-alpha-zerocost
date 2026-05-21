@@ -91,27 +91,59 @@
 ### Task 1: Archive pre-S0 runs
 
 **Files:**
-- Move: `experiments/alpha_s1/{20260517-173937, 20260517-211119, 20260518-102255, 20260519-074922, 20260519-202114}` → `experiments/alpha_s1/_archive_pre_s0/`
+- Move: every existing top-level directory under `experiments/alpha_s1/` (any name not starting with `_`) → `experiments/alpha_s1/_archive_pre_s0/`
+- Create + force-add: `experiments/alpha_s1/_archive_pre_s0/README.md`
 
-- [ ] **Step 1: Create the archive directory and move each pre-S0 run**
+**Important context:** `experiments/` is in `.gitignore` (line 1). The run directories themselves are **never tracked** in git, so `git mv` and a plain `git commit` of the move would do nothing. We use a plain `mv` for the filesystem move and force-add a small README so the archival *decision* lives in git history.
+
+- [ ] **Step 1: Move every existing run directory into `_archive_pre_s0/`**
 
 ```bash
 mkdir -p experiments/alpha_s1/_archive_pre_s0
-git mv experiments/alpha_s1/20260517-173937 experiments/alpha_s1/_archive_pre_s0/20260517-173937
-git mv experiments/alpha_s1/20260517-211119 experiments/alpha_s1/_archive_pre_s0/20260517-211119
-git mv experiments/alpha_s1/20260518-102255 experiments/alpha_s1/_archive_pre_s0/20260518-102255
-git mv experiments/alpha_s1/20260519-074922 experiments/alpha_s1/_archive_pre_s0/20260519-074922
-git mv experiments/alpha_s1/20260519-202114 experiments/alpha_s1/_archive_pre_s0/20260519-202114
+for d in experiments/alpha_s1/*/; do
+  name=$(basename "$d")
+  case "$name" in
+    _archive_pre_s0) ;;          # skip the archive itself
+    *) mv "$d" "experiments/alpha_s1/_archive_pre_s0/$name" ;;
+  esac
+done
 ```
 
 - [ ] **Step 2: Verify the layout**
 
 Run: `ls experiments/alpha_s1/ && echo --- && ls experiments/alpha_s1/_archive_pre_s0/`
-Expected: top-level shows only `_archive_pre_s0`; inside it the 5 run directories.
+Expected: top-level shows only `_archive_pre_s0`; inside it the previously-existing run directories.
 
-- [ ] **Step 3: Commit**
+- [ ] **Step 3: Create a tracked README documenting the archive**
+
+Write `experiments/alpha_s1/_archive_pre_s0/README.md`:
+
+```markdown
+# Archived pre-S0 alpha_s1 runs
+
+These training runs were produced by the pre-S0 trainers
+(`scripts/alpha_train_s1.py` and `scripts/alpha_train_s1_streaming.py`)
+before the S0 milestone landed.
+
+Each run directory contains the original artifacts but **only**
+`models/stacker.joblib` — the base models (ridge / lgb / xgb / cat / mlp /
+sequence) were never persisted by the old trainers, so these runs are not
+loadable by the post-S0 `quant_research_stack.alpha.inference.load_predictor_from_run`.
+
+They are preserved here for metric-history reference only. Do not point
+any post-S0 tooling at them.
+
+## Why this README is tracked
+
+`experiments/` is in `.gitignore`, so the run directories themselves
+cannot be committed. This README is force-added (`git add -f`) so the
+archival decision is in git history even though the artifacts aren't.
+```
+
+- [ ] **Step 4: Force-add the README and commit**
 
 ```bash
+git add -f experiments/alpha_s1/_archive_pre_s0/README.md
 git commit -m "refactor(s0): archive pre-S0 alpha_s1 runs under _archive_pre_s0/"
 ```
 
