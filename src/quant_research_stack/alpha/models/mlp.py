@@ -157,7 +157,7 @@ class MLPAlphaModel:
         torch.save(payload, str(path))
 
     @classmethod
-    def load(cls, path: Path) -> "MLPAlphaModel":
+    def load(cls, path: Path) -> MLPAlphaModel:
         path = Path(path)
         payload = torch.load(str(path), map_location="cpu", weights_only=False)
         inst = cls(MLPConfig(**payload["config"]))

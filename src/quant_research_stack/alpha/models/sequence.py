@@ -176,7 +176,7 @@ class Conv1DAlphaModel:
         torch.save(payload, str(path))
 
     @classmethod
-    def load(cls, path: Path) -> "Conv1DAlphaModel":
+    def load(cls, path: Path) -> Conv1DAlphaModel:
         path = Path(path)
         payload = torch.load(str(path), map_location="cpu", weights_only=False)
         inst = cls(Conv1DConfig(**payload["config"]))

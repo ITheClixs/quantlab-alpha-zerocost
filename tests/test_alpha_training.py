@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 from pathlib import Path
 
 import numpy as np
@@ -11,8 +10,8 @@ from quant_research_stack.alpha.inference import (
 )
 from quant_research_stack.alpha.registry import RunRegistry
 from quant_research_stack.alpha.training import (
-    CVConfig,
     CatBoostModelConfig,
+    CVConfig,
     DataConfig,
     FeatureConfig,
     LightGBMModelConfig,

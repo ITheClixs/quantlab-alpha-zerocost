@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import hashlib as _hashlib
+import json as _json
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
@@ -8,6 +10,19 @@ from typing import Protocol
 import numpy as np
 import polars as pl
 from numpy.typing import NDArray
+
+from quant_research_stack.alpha.exceptions import (
+    ArtifactCorruptError,
+    ArtifactsMissingError,
+    FeatureSchemaError,
+)
+from quant_research_stack.alpha.models.catboost_model import CatBoostAlphaModel
+from quant_research_stack.alpha.models.lightgbm_model import LightGBMAlphaModel
+from quant_research_stack.alpha.models.mlp import MLPAlphaModel
+from quant_research_stack.alpha.models.ridge import RidgeAlphaModel
+from quant_research_stack.alpha.models.sequence import Conv1DAlphaModel
+from quant_research_stack.alpha.models.xgboost_model import XGBoostAlphaModel
+from quant_research_stack.alpha.stacking import LinearStacker
 
 
 class S1Predictor(Protocol):
@@ -44,23 +59,6 @@ def build_predictor_from_stack(
     if len(base_funcs) != stacker_weights.size:
         raise ValueError("base_funcs and stacker_weights length mismatch")
     return _StackPredictor(base_funcs=base_funcs, weights=stacker_weights, feature_cols=feature_cols)
-
-
-import hashlib as _hashlib
-import json as _json
-
-from quant_research_stack.alpha.exceptions import (
-    ArtifactCorruptError,
-    ArtifactsMissingError,
-    FeatureSchemaError,
-)
-from quant_research_stack.alpha.models.catboost_model import CatBoostAlphaModel
-from quant_research_stack.alpha.models.lightgbm_model import LightGBMAlphaModel
-from quant_research_stack.alpha.models.mlp import MLPAlphaModel
-from quant_research_stack.alpha.models.ridge import RidgeAlphaModel
-from quant_research_stack.alpha.models.sequence import Conv1DAlphaModel
-from quant_research_stack.alpha.models.xgboost_model import XGBoostAlphaModel
-from quant_research_stack.alpha.stacking import LinearStacker
 
 
 _EXPECTED_BASE_MODEL_FILES: dict[str, str] = {

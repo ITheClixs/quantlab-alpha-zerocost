@@ -1,4 +1,3 @@
-import hashlib
 import json
 from pathlib import Path
 
@@ -6,7 +5,6 @@ import joblib
 import numpy as np
 import polars as pl
 import pytest
-import torch
 
 from quant_research_stack.alpha.exceptions import (
     ArtifactsMissingError,
@@ -69,11 +67,11 @@ def _build_minimal_run(run_dir: Path) -> list[str]:
     r.fit(x_tr, y_tr, w_tr)
     r.save(models_dir / "ridge.joblib")
 
-    l = LightGBMAlphaModel(LightGBMConfig(num_leaves=7, max_depth=3, learning_rate=0.1,
-                                          n_estimators=20, early_stopping_rounds=5,
-                                          feature_fraction=1.0, bagging_fraction=1.0))
-    l.fit(x_tr, y_tr, w_tr, x_val, y_val, w_val)
-    l.save(models_dir / "lightgbm.txt")
+    lgb = LightGBMAlphaModel(LightGBMConfig(num_leaves=7, max_depth=3, learning_rate=0.1,
+                                            n_estimators=20, early_stopping_rounds=5,
+                                            feature_fraction=1.0, bagging_fraction=1.0))
+    lgb.fit(x_tr, y_tr, w_tr, x_val, y_val, w_val)
+    lgb.save(models_dir / "lightgbm.txt")
 
     xg = XGBoostAlphaModel(XGBoostConfig(max_depth=3, learning_rate=0.1, n_estimators=20,
                                          early_stopping_rounds=5, tree_method="hist"))
@@ -99,7 +97,7 @@ def _build_minimal_run(run_dir: Path) -> list[str]:
 
     feature_order = ["ridge", "lgb", "xgb", "cat", "mlp", "seq"]
     stack_x = np.column_stack([
-        r.predict(x_val), l.predict(x_val), xg.predict(x_val),
+        r.predict(x_val), lgb.predict(x_val), xg.predict(x_val),
         cb.predict(x_val), mp.predict(x_val), seq.predict(x_val),
     ])
     stacker = LinearStacker(alpha=1e-3, feature_order=feature_order)

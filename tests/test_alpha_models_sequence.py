@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import numpy as np
-import torch
 
 from quant_research_stack.alpha.models.sequence import Conv1DAlphaModel, Conv1DConfig
 
