@@ -60,7 +60,7 @@ Record the new R2 here when this runbook is first executed:
 
 | Run id | Holdout R2 (S0, all 6 models) | Notes |
 |---|---:|---|
-| `<may-21-or-later>` | `<fill in>` | first post-S0 run |
+| `20260523-160541` | `0.005489` | first post-S0 5M row-budget run; loader verified; below the `0.012` section 13 gate |
 
 If the new R2 falls below the section 13 gate of `0.012`, do not pretend by reverting to zeroed holdout. Open a follow-up spec investigating which base model dropped, then tune in S5/S6/S8.
 
