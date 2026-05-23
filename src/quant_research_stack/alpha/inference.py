@@ -124,8 +124,9 @@ class _BoundStackPredictor:
                 f"caller passed DataFrame missing required columns: {sorted(missing)}"
             )
         x = row.select(self.feature_columns).to_numpy()[0]
-        base_outs = np.empty(len(self.stacker.feature_order), dtype=np.float64)
-        for i, name in enumerate(self.stacker.feature_order):
+        base_outs = np.zeros(len(self.stacker.feature_order), dtype=np.float64)
+        for name in self.stacker.active_feature_order:
+            i = self.stacker.feature_order.index(name)
             model = self.base_models[name]
             base_outs[i] = float(model.predict(x.reshape(1, -1))[0])  # type: ignore[attr-defined]
         pred = float(self.stacker.predict(base_outs.reshape(1, -1))[0])

@@ -11,9 +11,11 @@ from quant_research_stack.alpha.exceptions import (
     FeatureSchemaError,
 )
 from quant_research_stack.alpha.inference import (
+    _BoundStackPredictor,
     _canonical_sha256,
     load_predictor_from_run,
 )
+from quant_research_stack.alpha.stacking import LinearStacker
 
 
 def test_synthetic_js_fixture_shape(synthetic_js):
@@ -177,3 +179,36 @@ def test_predictor_reorders_columns(tmp_path):
         np.array(predictor.predict(in_order)),
         np.array(predictor.predict(shuffled)),
     )
+
+
+def test_bound_predictor_skips_zero_weight_inactive_models():
+    class ConstantModel:
+        def __init__(self, value: float) -> None:
+            self.value = value
+
+        def predict(self, x):
+            return np.full(x.shape[0], self.value)
+
+    class FailingModel:
+        def predict(self, x):
+            raise AssertionError("inactive model should not be evaluated")
+
+    x = np.array([[1.0, 2.0, 99.0], [2.0, 4.0, -99.0]])
+    y = np.array([1.0, 2.0])
+    w = np.ones(2)
+    stacker = LinearStacker(alpha=1e-3, feature_order=["ridge", "lgb", "mlp"])
+    stacker.fit(x, y, w, active_feature_order=["ridge", "lgb"])
+
+    predictor = _BoundStackPredictor(
+        base_models={
+            "ridge": ConstantModel(1.0),
+            "lgb": ConstantModel(2.0),
+            "mlp": FailingModel(),
+        },
+        stacker=stacker,
+        feature_columns=["feature_00"],
+    )
+
+    pred, conf = predictor.predict(pl.DataFrame({"feature_00": [0.5]}))
+    assert isinstance(pred, float)
+    assert 0.0 <= conf <= 1.0
