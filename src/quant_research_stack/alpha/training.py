@@ -10,14 +10,20 @@ global state, no CLI argument parsing, no console output beyond progress logs.
 
 from __future__ import annotations
 
+import hashlib
+import json
+import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Literal
 
 import numpy as np
+import polars as pl
 from numpy.typing import NDArray
 from pydantic import BaseModel, Field
 
+from quant_research_stack.alpha.inference import _canonical_sha256
+from quant_research_stack.alpha.metrics import weighted_zero_mean_r2
 from quant_research_stack.alpha.models.catboost_model import (
     CatBoostAlphaModel,
     CatBoostConfig,
@@ -33,6 +39,7 @@ from quant_research_stack.alpha.models.xgboost_model import (
     XGBoostAlphaModel,
     XGBoostConfig,
 )
+from quant_research_stack.alpha.registry import RunMetadata, RunRegistry
 from quant_research_stack.alpha.stacking import LinearStacker
 
 # -----------------------------------------------------------------------------
@@ -282,6 +289,380 @@ def _fit_stacker(
     return stacker
 
 
-# Placeholder; real implementation lands in Task 13 + 14.
-def train_s1(config: TrainConfig, registry: object) -> RunResult:
-    raise NotImplementedError("train_s1 is implemented in Task 13 + 14")
+def _refit_on_full(
+    *,
+    x_full: NDArray[np.float64],
+    y_full: NDArray[np.float64],
+    w_full: NDArray[np.float64],
+    models_config: ModelsConfig,
+) -> dict[str, object]:
+    """Refit each base model on the entire training slice. These are the models persisted to disk."""
+    eval_n = min(1000, x_full.shape[0] // 5)
+    if eval_n < 2:
+        eval_n = max(2, x_full.shape[0] // 2)
+    x_eval = x_full[-eval_n:]
+    y_eval = y_full[-eval_n:]
+    w_eval = w_full[-eval_n:]
+
+    finals: dict[str, object] = {}
+
+    ridge = RidgeAlphaModel(RidgeConfig(alpha=models_config.ridge.alpha))
+    ridge.fit(x_full, y_full, w_full)
+    finals["ridge"] = ridge
+
+    lcfg = models_config.lightgbm
+    lgb = LightGBMAlphaModel(
+        LightGBMConfig(
+            num_leaves=lcfg.num_leaves,
+            max_depth=lcfg.max_depth,
+            learning_rate=lcfg.learning_rate,
+            n_estimators=lcfg.n_estimators,
+            early_stopping_rounds=lcfg.early_stopping_rounds,
+            feature_fraction=lcfg.feature_fraction,
+            bagging_fraction=lcfg.bagging_fraction,
+        )
+    )
+    lgb.fit(x_full, y_full, w_full, x_eval, y_eval, w_eval)
+    finals["lgb"] = lgb
+
+    xcfg = models_config.xgboost
+    xgb = XGBoostAlphaModel(
+        XGBoostConfig(
+            max_depth=xcfg.max_depth,
+            learning_rate=xcfg.learning_rate,
+            n_estimators=xcfg.n_estimators,
+            early_stopping_rounds=xcfg.early_stopping_rounds,
+            tree_method=xcfg.tree_method,
+        )
+    )
+    xgb.fit(x_full, y_full, w_full, x_eval, y_eval, w_eval)
+    finals["xgb"] = xgb
+
+    ccfg = models_config.catboost
+    cat = CatBoostAlphaModel(
+        CatBoostConfig(
+            depth=ccfg.depth,
+            learning_rate=ccfg.learning_rate,
+            n_estimators=ccfg.n_estimators,
+            early_stopping_rounds=ccfg.early_stopping_rounds,
+        )
+    )
+    cat.fit(x_full, y_full, w_full, x_eval, y_eval, w_eval)
+    finals["cat"] = cat
+
+    mcfg = models_config.mlp
+    mlp = MLPAlphaModel(
+        MLPConfig(
+            hidden_dims=list(mcfg.hidden_dims),
+            dropout=mcfg.dropout,
+            learning_rate=mcfg.learning_rate,
+            batch_size=mcfg.batch_size,
+            max_epochs=mcfg.max_epochs,
+            patience=mcfg.patience,
+            mixed_precision=mcfg.mixed_precision,
+        )
+    )
+    mlp.fit(x_full, y_full, w_full, x_eval, y_eval, w_eval)
+    finals["mlp"] = mlp
+
+    scfg = models_config.sequence
+    seq = Conv1DAlphaModel(
+        Conv1DConfig(
+            kernel_sizes=list(scfg.kernel_sizes),
+            n_filters=scfg.n_filters,
+            dropout=scfg.dropout,
+            learning_rate=scfg.learning_rate,
+            batch_size=scfg.batch_size,
+            max_epochs=scfg.max_epochs,
+            patience=scfg.patience,
+            random_state=scfg.random_state,
+        )
+    )
+    seq.fit(x_full, y_full, w_full, x_eval, y_eval, w_eval)
+    finals["seq"] = seq
+
+    return finals
+
+
+def _sha256_file(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def _persist_run(
+    *,
+    run_dir: Path,
+    finals: dict[str, object],
+    stacker: LinearStacker,
+    feature_cols: list[str],
+    data_config: DataConfig,
+) -> None:
+    models_dir = run_dir / "models"
+    models_dir.mkdir(parents=True, exist_ok=True)
+
+    finals["ridge"].save(models_dir / "ridge.joblib")  # type: ignore[attr-defined]
+    finals["lgb"].save(models_dir / "lightgbm.txt")  # type: ignore[attr-defined]
+    finals["xgb"].save(models_dir / "xgboost.json")  # type: ignore[attr-defined]
+    finals["cat"].save(models_dir / "catboost.cbm")  # type: ignore[attr-defined]
+    finals["mlp"].save(models_dir / "mlp.pt")  # type: ignore[attr-defined]
+    finals["seq"].save(models_dir / "sequence.pt")  # type: ignore[attr-defined]
+    stacker.save(models_dir / "stacker.joblib")
+
+    schema_path = run_dir / "feature_cols.json"
+    schema_path.write_text(
+        json.dumps(
+            {
+                "feature_columns": list(feature_cols),
+                "n_features": len(feature_cols),
+                "feature_cols_sha256": _canonical_sha256(list(feature_cols)),
+                "target_column": data_config.target_column,
+                "weight_column": data_config.weight_column,
+                "group_column": data_config.group_column,
+            },
+            indent=2,
+            sort_keys=True,
+        )
+    )
+
+    sha_index_path = run_dir / "_artifact_sha256.json"
+    sha_index: dict[str, str] = {}
+    if sha_index_path.exists():
+        sha_index = json.loads(sha_index_path.read_text())
+    sha_index["feature_cols.json"] = _sha256_file(schema_path)
+    for fname in [
+        "ridge.joblib",
+        "lightgbm.txt",
+        "xgboost.json",
+        "catboost.cbm",
+        "mlp.pt",
+        "sequence.pt",
+        "stacker.joblib",
+    ]:
+        sha_index[f"models/{fname}"] = _sha256_file(models_dir / fname)
+    sha_index_path.write_text(json.dumps(sha_index, indent=2, sort_keys=True))
+
+
+def _holdout_eval(
+    *,
+    finals: dict[str, object],
+    stacker: LinearStacker,
+    x_h: NDArray[np.float64],
+    y_h: NDArray[np.float64],
+    w_h: NDArray[np.float64],
+) -> tuple[float, dict[str, float], NDArray[np.float64]]:
+    """Phase 5 — uses ALL 6 final models (no zeroing). Returns (R², per-model R², ensemble preds)."""
+    per_model = {
+        name: finals[name].predict(x_h).astype(np.float64)  # type: ignore[attr-defined]
+        for name in _BASE_MODEL_NAMES
+    }
+    h_stack = np.column_stack([per_model[n] for n in stacker.feature_order])
+    holdout_pred = stacker.predict(h_stack)
+    holdout_r2 = float(weighted_zero_mean_r2(y_h, holdout_pred, w_h))
+    per_model_r2 = {
+        f"{name}_r2": float(weighted_zero_mean_r2(y_h, preds, w_h))
+        for name, preds in per_model.items()
+    }
+    return holdout_r2, per_model_r2, holdout_pred
+
+
+def _load_and_split(
+    *,
+    config: TrainConfig,
+    synthetic_dataframe: pl.DataFrame | None,
+) -> tuple[pl.DataFrame, pl.DataFrame, list[str]]:
+    """Phase 1 — load + split + feature filter.
+
+    If synthetic_dataframe is provided (tests), use it directly and bypass JS-on-disk loaders.
+    """
+    if synthetic_dataframe is not None:
+        df = synthetic_dataframe
+    else:
+        from quant_research_stack.alpha.io import LoadConfig, load_jane_street
+
+        load_cfg = LoadConfig(
+            target_column=config.data.target_column,
+            weight_column=config.data.weight_column,
+            group_column=config.data.group_column,
+            holdout_fraction=config.data.permanent_holdout_fraction,
+        )
+        df = load_jane_street(config.data.jane_street_root, load_cfg)
+
+    group_col = config.data.group_column
+
+    groups = df[group_col].unique().sort()
+    n_groups = groups.len()
+    holdout_n = max(1, int(n_groups * config.data.permanent_holdout_fraction))
+    holdout_groups = groups.tail(holdout_n).to_list()
+    train_groups = groups.head(n_groups - holdout_n).to_list()
+
+    train_df = df.filter(pl.col(group_col).is_in(train_groups))
+    holdout_df = df.filter(pl.col(group_col).is_in(holdout_groups))
+
+    feature_cols = [c for c in df.columns if c.startswith("feature_")]
+    if not feature_cols:
+        raise RuntimeError("no feature_* columns found in input frame")
+    return train_df, holdout_df, feature_cols
+
+
+def _git_sha() -> str:
+    try:
+        return subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
+    except Exception:
+        return "unknown"
+
+
+def train_s1(
+    config: TrainConfig,
+    registry: RunRegistry,
+    *,
+    synthetic_dataframe: pl.DataFrame | None = None,
+) -> RunResult:
+    """End-to-end S1 training. Writes a complete run dir loadable by load_predictor_from_run."""
+    train_df, holdout_df, feature_cols = _load_and_split(
+        config=config, synthetic_dataframe=synthetic_dataframe
+    )
+
+    target_col = config.data.target_column
+    weight_col = config.data.weight_column
+
+    x_full = train_df.select(feature_cols).to_numpy().astype(np.float64)
+    y_full = train_df[target_col].to_numpy().astype(np.float64)
+    w_full = train_df[weight_col].to_numpy().astype(np.float64)
+    x_full = np.nan_to_num(x_full, nan=0.0)
+
+    n = x_full.shape[0]
+    fold_size = n // config.cv.n_folds
+
+    oof: dict[str, NDArray[np.float64]] = {
+        name: np.zeros(n, dtype=np.float64) for name in _BASE_MODEL_NAMES
+    }
+    fold_metrics: list[dict[str, float]] = []
+
+    for fold_idx in range(config.cv.n_folds):
+        te_start = fold_idx * fold_size
+        te_end = (fold_idx + 1) * fold_size if fold_idx < config.cv.n_folds - 1 else n
+        te_idx = np.arange(te_start, te_end)
+        tr_idx = np.concatenate([np.arange(0, te_start), np.arange(te_end, n)])
+
+        fold_oof = _fit_one_fold(
+            fold_idx=fold_idx,
+            x_tr=x_full[tr_idx],
+            y_tr=y_full[tr_idx],
+            w_tr=w_full[tr_idx],
+            x_te=x_full[te_idx],
+            y_te=y_full[te_idx],
+            w_te=w_full[te_idx],
+            models_config=config.models,
+        )
+        for name in _BASE_MODEL_NAMES:
+            oof[name][te_idx] = fold_oof[name]
+
+        fold_metrics.append(
+            {
+                "fold": float(fold_idx),
+                **{
+                    f"{name}_r2": float(
+                        weighted_zero_mean_r2(y_full[te_idx], fold_oof[name], w_full[te_idx])
+                    )
+                    for name in _BASE_MODEL_NAMES
+                },
+            }
+        )
+
+    stacker = _fit_stacker(
+        oof_by_name=oof,
+        y_full=y_full,
+        w_full=w_full,
+        stacker_alpha=config.stacker_alpha,
+    )
+
+    finals = _refit_on_full(
+        x_full=x_full,
+        y_full=y_full,
+        w_full=w_full,
+        models_config=config.models,
+    )
+
+    x_h = holdout_df.select(feature_cols).to_numpy().astype(np.float64)
+    y_h = holdout_df[target_col].to_numpy().astype(np.float64)
+    w_h = holdout_df[weight_col].to_numpy().astype(np.float64)
+    x_h = np.nan_to_num(x_h, nan=0.0)
+
+    holdout_r2, per_model_r2, holdout_pred = _holdout_eval(
+        finals=finals, stacker=stacker, x_h=x_h, y_h=y_h, w_h=w_h
+    )
+
+    git_sha = _git_sha()
+    meta = RunMetadata(
+        version="0.2.0-s0",
+        git_sha=git_sha,
+        data_hashes={"jane_street_root": config.data.jane_street_root},
+        hyperparams=config.model_dump(),
+        fold_definition={
+            "n_folds": config.cv.n_folds,
+            "purge": config.cv.purge_days,
+            "embargo": config.cv.embargo_days,
+        },
+    )
+    run_id = registry.create_run(meta)
+    run_dir = Path(registry.root) / run_id
+
+    metrics_payload = {
+        "fold_metrics": fold_metrics,
+        "holdout_weighted_zero_mean_r2": holdout_r2,
+        "holdout_per_model_r2": per_model_r2,
+        "n_features_after_adversarial": len(feature_cols),
+        "n_features_after_noise_floor": len(feature_cols),
+        "training_rows": int(n),
+        "holdout_rows": int(x_h.shape[0]),
+        "profile": "s0_unified_full_holdout_refit",
+    }
+    registry.save_artifact(run_id, "metrics.json", json.dumps(metrics_payload, indent=2).encode())
+
+    # predictions.parquet — holdout + OOF.
+    oof_stack = np.column_stack([oof[mn] for mn in stacker.feature_order])
+    oof_pred = stacker.predict(oof_stack)
+    preds_df = pl.DataFrame(
+        {
+            "split": ["holdout"] * x_h.shape[0] + ["train_oof"] * n,
+            "target_actual": np.concatenate([y_h, y_full]).astype(np.float32),
+            "weight": np.concatenate([w_h, w_full]).astype(np.float32),
+            "stacked": np.concatenate(
+                [
+                    holdout_pred.astype(np.float32),
+                    oof_pred.astype(np.float32),
+                ]
+            ),
+            **{
+                name: np.concatenate(
+                    [
+                        finals[name].predict(x_h).astype(np.float32),  # type: ignore[attr-defined]
+                        oof[name].astype(np.float32),
+                    ]
+                )
+                for name in _BASE_MODEL_NAMES
+            },
+        }
+    )
+    preds_df.write_parquet(run_dir / "predictions.parquet")
+
+    _persist_run(
+        run_dir=run_dir,
+        finals=finals,
+        stacker=stacker,
+        feature_cols=feature_cols,
+        data_config=config.data,
+    )
+
+    return RunResult(
+        run_id=run_id,
+        run_dir=run_dir,
+        fold_metrics=fold_metrics,
+        holdout_weighted_zero_mean_r2=holdout_r2,
+        n_features_after_adversarial=len(feature_cols),
+        n_features_after_noise_floor=len(feature_cols),
+        base_models_persisted=list(_BASE_MODEL_NAMES),
+        stacker_path=run_dir / "models" / "stacker.joblib",
+        feature_cols_path=run_dir / "feature_cols.json",
+    )
+
+

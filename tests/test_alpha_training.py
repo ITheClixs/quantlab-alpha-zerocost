@@ -1,7 +1,15 @@
 from __future__ import annotations
 
+import json
+from pathlib import Path
+
 import numpy as np
 
+from quant_research_stack.alpha.inference import (
+    _EXPECTED_BASE_MODEL_FILES,
+    load_predictor_from_run,
+)
+from quant_research_stack.alpha.registry import RunRegistry
 from quant_research_stack.alpha.training import (
     CVConfig,
     CatBoostModelConfig,
@@ -15,6 +23,7 @@ from quant_research_stack.alpha.training import (
     TrainConfig,
     XGBoostModelConfig,
     _fit_one_fold,
+    train_s1,
 )
 
 
@@ -164,3 +173,96 @@ def test_train_config_rejects_bad_alpha():
 
     with pytest.raises(ValidationError):
         RidgeModelConfig(alpha=-1.0)  # alpha must be > 0
+
+
+def _train_config_for_synthetic(tmp_path: Path) -> dict:
+    return {
+        "data": {
+            "jane_street_root": str(tmp_path),  # ignored when synthetic_dataframe is passed
+            "group_column": "date_id",
+            "target_column": "responder_6",
+            "weight_column": "weight",
+            "max_rows": 10_000,
+            "permanent_holdout_fraction": 0.2,
+        },
+        "cv": {"n_folds": 2, "purge_days": 0, "embargo_days": 0, "random_seed": 0},
+        "features": {
+            "lag_windows": [],
+            "rolling_windows": [],
+            "cross_sectional_ranks": False,
+            "include_noise_feature": False,
+            "noise_seed": 0,
+        },
+        "models": {
+            "ridge": {"alpha": 1.0},
+            "lightgbm": {
+                "num_leaves": 7,
+                "max_depth": 3,
+                "learning_rate": 0.1,
+                "n_estimators": 20,
+                "early_stopping_rounds": 5,
+                "feature_fraction": 1.0,
+                "bagging_fraction": 1.0,
+            },
+            "xgboost": {
+                "max_depth": 3,
+                "learning_rate": 0.1,
+                "n_estimators": 20,
+                "early_stopping_rounds": 5,
+                "tree_method": "hist",
+            },
+            "catboost": {
+                "depth": 3,
+                "learning_rate": 0.1,
+                "n_estimators": 20,
+                "early_stopping_rounds": 5,
+            },
+            "mlp": {
+                "hidden_dims": [8],
+                "dropout": 0.0,
+                "learning_rate": 1e-3,
+                "batch_size": 64,
+                "max_epochs": 2,
+                "patience": 2,
+                "mixed_precision": False,
+            },
+            "sequence": {
+                "kernel_sizes": [3],
+                "n_filters": 8,
+                "dropout": 0.0,
+                "learning_rate": 1e-3,
+                "batch_size": 64,
+                "max_epochs": 2,
+                "patience": 2,
+                "random_state": 0,
+            },
+        },
+        "stacker_alpha": 1e-3,
+        "streaming": False,
+        "max_rows_streaming": 10_000,
+    }
+
+
+def test_train_s1_end_to_end_on_synthetic(synthetic_js, tmp_path):
+    cfg = TrainConfig.from_dict(_train_config_for_synthetic(tmp_path))
+    registry = RunRegistry(root=tmp_path / "experiments")
+    result = train_s1(cfg, registry, synthetic_dataframe=synthetic_js)
+
+    # Run dir exists with all expected files.
+    assert result.run_dir.exists()
+    for fname in _EXPECTED_BASE_MODEL_FILES.values():
+        assert (result.run_dir / "models" / fname).exists(), f"missing {fname}"
+    assert (result.run_dir / "models" / "stacker.joblib").exists()
+    assert (result.run_dir / "feature_cols.json").exists()
+    assert (result.run_dir / "_artifact_sha256.json").exists()
+    assert (result.run_dir / "metrics.json").exists()
+    assert (result.run_dir / "predictions.parquet").exists()
+
+    # Loader returns a working predictor.
+    predictor = load_predictor_from_run(result.run_dir)
+    assert sorted(predictor.expected_feature_columns) == sorted(
+        [c for c in synthetic_js.columns if c.startswith("feature_")]
+    )
+
+    # And R² is a real number (not NaN/inf), even if synthetic data isn't calibrated to a gate.
+    assert np.isfinite(result.holdout_weighted_zero_mean_r2)
