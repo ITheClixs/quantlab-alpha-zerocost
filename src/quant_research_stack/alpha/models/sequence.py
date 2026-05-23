@@ -59,8 +59,7 @@ class Conv1DAlphaModel:
         self._net: _Conv1DNet | None = None
         self._dev = _device(config.device)
         self._scaler: StandardScaler | None = None
-        self._channels: int | None = None
-        self._seq_len: int | None = None
+        self._n_features: int | None = None
         torch.manual_seed(config.random_state)
 
     def fit(
@@ -75,29 +74,37 @@ class Conv1DAlphaModel:
         x_train = np.asarray(x_train, dtype=np.float64)
         x_val = np.asarray(x_val, dtype=np.float64)
 
-        self._seq_len = x_train.shape[-2]
-        self._channels = x_train.shape[-1]
+        # Accept 2D input (n, n_features); reshape to 3D (n, n_features, 1) for Conv1d.
+        assert x_train.ndim == 2, f"Expected 2D input (n, n_features), got shape {x_train.shape}"
+        assert x_val.ndim == 2, f"Expected 2D input (n, n_features), got shape {x_val.shape}"
 
-        # Fit scaler per-channel on training data only; apply to train and val.
-        # Reshape (batch, seq_len, channels) -> (batch*seq_len, channels) for sklearn.
-        flat_train = x_train.reshape(-1, self._channels)
+        self._n_features = x_train.shape[1]
+
+        # Fit scaler per-feature on 2D training data; scale train and val.
         self._scaler = StandardScaler()
-        self._scaler.fit(flat_train)
+        self._scaler.fit(x_train)
 
-        x_train_scaled = _scale_3d(self._scaler, x_train)
-        x_val_scaled = _scale_3d(self._scaler, x_val)
+        x_train_scaled = self._scaler.transform(x_train).astype(np.float32)
+        x_val_scaled = self._scaler.transform(x_val).astype(np.float32)
+
+        # Reshape 2D (n, n_features) -> 3D (n, n_features, 1) for Conv1d.
+        x_train_3d = x_train_scaled[:, :, np.newaxis]
+        x_val_3d = x_val_scaled[:, :, np.newaxis]
 
         self._net = _Conv1DNet(
-            self._channels, self.config.n_filters, list(self.config.kernel_sizes), self.config.dropout
+            channels=1,
+            n_filters=self.config.n_filters,
+            kernel_sizes=list(self.config.kernel_sizes),
+            dropout=self.config.dropout
         ).to(self._dev)
         opt = torch.optim.Adam(self._net.parameters(), lr=self.config.learning_rate)
         train_ds = TensorDataset(
-            torch.tensor(x_train_scaled, dtype=torch.float32),
+            torch.tensor(x_train_3d, dtype=torch.float32),
             torch.tensor(y_train, dtype=torch.float32),
             torch.tensor(w_train, dtype=torch.float32),
         )
         train_loader = DataLoader(train_ds, batch_size=self.config.batch_size, shuffle=True)
-        vx = torch.tensor(x_val_scaled, dtype=torch.float32).to(self._dev)
+        vx = torch.tensor(x_val_3d, dtype=torch.float32).to(self._dev)
         vy = torch.tensor(y_val, dtype=torch.float32).to(self._dev)
         vw = torch.tensor(w_val, dtype=torch.float32).to(self._dev)
         best, stalls = float("inf"), 0
@@ -129,21 +136,33 @@ class Conv1DAlphaModel:
             raise RuntimeError("call fit() first")
         if self._scaler is None:
             raise RuntimeError("call fit() first")
-        x_scaled = _scale_3d(self._scaler, np.asarray(x, dtype=np.float64))
+        if self._n_features is None:
+            raise RuntimeError("call fit() first")
+
+        x = np.asarray(x, dtype=np.float64)
+        assert x.ndim == 2, f"Expected 2D input (n, n_features), got shape {x.shape}"
+        assert x.shape[1] == self._n_features, (
+            f"Expected {self._n_features} features, got {x.shape[1]}"
+        )
+
+        # Scale and reshape 2D (n, n_features) -> 3D (n, n_features, 1).
+        x_scaled = self._scaler.transform(x).astype(np.float32)
+        x_3d = x_scaled[:, :, np.newaxis]
+
         self._net.eval()
         with torch.no_grad():
-            out = self._net(torch.tensor(x_scaled, dtype=torch.float32).to(self._dev))
+            out = self._net(torch.tensor(x_3d, dtype=torch.float32).to(self._dev))
         return out.detach().cpu().numpy().astype(np.float64)
 
     def save(self, path: Path) -> None:
         path = Path(path)
         path.parent.mkdir(parents=True, exist_ok=True)
-        if self._net is None or self._scaler is None or self._channels is None:
+        if self._net is None or self._scaler is None or self._n_features is None:
             raise RuntimeError("cannot save un-fitted Conv1DAlphaModel")
         payload = {
             "state_dict": self._net.state_dict(),
             "arch": {
-                "channels": int(self._channels),
+                "n_features": int(self._n_features),
                 "n_filters": int(self.config.n_filters),
                 "kernel_sizes": list(self.config.kernel_sizes),
                 "dropout": float(self.config.dropout),
@@ -162,9 +181,10 @@ class Conv1DAlphaModel:
         payload = torch.load(str(path), map_location="cpu", weights_only=False)
         inst = cls(Conv1DConfig(**payload["config"]))
         arch = payload["arch"]
-        inst._channels = arch["channels"]
+        inst._n_features = arch["n_features"]
+        # Conv1d always has 1 channel after 2D->3D reshape.
         inst._net = _Conv1DNet(
-            channels=arch["channels"],
+            channels=1,
             n_filters=arch["n_filters"],
             kernel_sizes=arch["kernel_sizes"],
             dropout=arch["dropout"],
