@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 
 import numpy as np
+import yaml
 
 from quant_research_stack.alpha.inference import (
     _EXPECTED_BASE_MODEL_FILES,
@@ -164,6 +165,17 @@ def test_train_config_from_yaml_smoke():
     assert cfg.cv.n_folds == 3
     assert cfg.models.ridge.alpha == 1.0
     assert cfg.streaming is False
+
+
+def test_checked_in_alpha_configs_load():
+    for config_path in [
+        Path("configs/alpha.yaml"),
+        Path("configs/alpha_fast.yaml"),
+        Path("configs/alpha_5m.yaml"),
+    ]:
+        payload = yaml.safe_load(config_path.read_text())
+        assert isinstance(payload, dict), f"{config_path} must contain a YAML mapping"
+        TrainConfig.from_dict(payload)
 
 
 def test_train_config_rejects_bad_alpha():

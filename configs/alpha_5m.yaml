@@ -18,12 +18,11 @@ features:
   lag_windows: [1, 5, 20]
   rolling_windows: [5, 20]
   cross_sectional_ranks: false
-  interaction_pairs_top_n: 0
   include_noise_feature: true
 
 models:
   ridge:
-    alpha_grid: [0.1, 1.0, 10.0]
+    alpha: 1.0
   # Optuna-tuned (30 trials × 3 folds × 1.5M rows, leak-fixed) → CV R² 0.0529 vs the
   # default-config CV R² ~0.044 in fold 1 → 20% relative improvement. Tuned params favor
   # wider trees (210 leaves), bounded depth (10), much lower LR (0.0064), smaller
@@ -56,17 +55,16 @@ models:
     max_epochs: 12
     patience: 3
     mixed_precision: true
+  sequence:
+    kernel_sizes: [3, 5]
+    n_filters: 32
+    dropout: 0.1
+    learning_rate: 0.0005
+    batch_size: 4096
+    max_epochs: 5
+    patience: 2
+    random_state: 42
 
-stacking:
-  method: linear
-  fit_on: oof_predictions
-
-training_budget:
-  profile: streaming_5m
-  max_rows_recommended: 5000000
-  target_wall_clock_hours: 8
-
-success_gate:
-  min_holdout_r2: 0.005
-  max_fold_std_r2: 0.01
-  min_ridge_baseline_improvement_pct: 30
+stacker_alpha: 0.001
+streaming: true
+max_rows_streaming: 5000000

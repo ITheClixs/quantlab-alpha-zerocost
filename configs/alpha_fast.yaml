@@ -6,6 +6,7 @@ data:
   target_column: responder_6
   weight_column: weight
   group_column: date_id
+  max_rows: 100000
 
 cv:
   n_folds: 3
@@ -17,12 +18,11 @@ features:
   lag_windows: [1, 5]
   rolling_windows: [5]
   cross_sectional_ranks: true
-  interaction_pairs_top_n: 10
   include_noise_feature: true
 
 models:
   ridge:
-    alpha_grid: [0.1, 1.0, 10.0]
+    alpha: 1.0
   lightgbm:
     num_leaves: 31
     max_depth: -1
@@ -51,28 +51,15 @@ models:
     patience: 2
     mixed_precision: true
   sequence:
-    architecture: cnn1d
-    seq_len: 16
     kernel_sizes: [3, 5]
     n_filters: 32
-    max_epochs: 5
+    dropout: 0.1
     learning_rate: 0.0005
+    batch_size: 1024
+    max_epochs: 5
+    patience: 2
+    random_state: 42
 
-stacking:
-  method: linear
-  fit_on: oof_predictions
-
-optuna:
-  trials_per_fold: 5
-  pruner: median
-  sampler: tpe
-
-training_budget:
-  profile: fast_interactive
-  max_rows_recommended: 100000
-  target_wall_clock_minutes: 15
-
-success_gate:
-  min_holdout_r2: 0.0
-  max_fold_std_r2: 0.02
-  min_ridge_baseline_improvement_pct: 0
+stacker_alpha: 0.001
+streaming: false
+max_rows_streaming: 100000

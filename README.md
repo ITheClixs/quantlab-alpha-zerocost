@@ -282,7 +282,8 @@ Plain English: final S1 output is a weighted blend of base model predictions.
 
 ### Success Gate
 
-The S1 gate is defined in `configs/alpha.yaml`:
+The S1 milestone gate is enforced from the produced `metrics.json` and retrain
+runbook checks:
 
 ```text
 holdout weighted zero-mean R2 >= 0.012
