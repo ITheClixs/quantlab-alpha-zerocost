@@ -23,7 +23,7 @@ This gives four concrete research questions:
 
 | ID | Research question | Repository evidence |
 |---|---|---|
-| RQ1 | Can tabular models improve weighted zero-mean R2 on Jane Street-style targets without leakage? | `src/quant_research_stack/alpha/`, `scripts/alpha_train_s1.py`, `configs/alpha.yaml` |
+| RQ1 | Can tabular models improve weighted zero-mean R2 on Jane Street-style targets without leakage? | `src/quant_research_stack/alpha/`, `scripts/train_s1.py`, `configs/alpha.yaml` |
 | RQ2 | Can fold-stable features survive adversarial validation and noise-feature controls? | `alpha/features.py`, `alpha/adversarial.py`, `scripts/alpha_s1_success_gate.py` |
 | RQ3 | Can an LLM governor veto unsupported trades while being forced to cite local research chunks? | `src/quant_research_stack/governor/`, `configs/governor.yaml`, ADR 0005 |
 | RQ4 | Can staged promotion prevent accidental live trading before paper and shadow evidence exists? | `docs/runbooks/`, ADR 0002, `QUANTLAB_STAGE` |

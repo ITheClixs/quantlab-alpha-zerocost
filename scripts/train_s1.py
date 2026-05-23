@@ -1,6 +1,6 @@
 """Unified S1 training CLI.
 
-Replaces both alpha_train_s1.py and alpha_train_s1_streaming.py.
+Replaces the legacy split S1 trainer entrypoints.
 
 Usage:
     PYTHONPATH=src uv run python scripts/train_s1.py \

@@ -22,7 +22,7 @@ Command:
 ```bash
 PYTORCH_ENABLE_MPS_FALLBACK=1 make full-retrain-s1 \
   EXTRACT="scripts/alpha_extract_meta_features.py --model-dir models/huggingface/hasnain43__bert-stock-sentiment-v1" \
-  TRAIN="scripts/alpha_train_s1.py --config configs/alpha_fast.yaml --max-rows 100000" \
+  TRAIN="scripts/train_s1.py" TRAIN_CONFIG="configs/alpha_fast.yaml" TRAIN_MAX_ROWS=100000 \
   OPTUNA="scripts/alpha_optuna_search.py --config configs/alpha_fast.yaml --max-rows 100000" \
   OPTUNA_ARGS="--n-trials 5"
 ```

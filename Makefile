@@ -1,13 +1,13 @@
 PY := PYTHONPATH=src uv run
+TRAIN := scripts/train_s1.py
 EXTRACT := scripts/alpha_extract_meta_features.py
-TRAIN := scripts/alpha_train_s1.py
-TRAIN_STREAMING := scripts/alpha_train_s1_streaming.py
-TRAIN_STREAMING_CONFIG ?= configs/alpha_5m.yaml
-TRAIN_STREAMING_ROWS ?= 5000000
 OPTUNA := scripts/alpha_optuna_search.py
+TRAIN_CONFIG ?= configs/alpha.yaml
+TRAIN_MAX_ROWS ?=
+STREAMING ?=
 OPTUNA_ARGS ?= --n-trials 200
 
-.PHONY: test lint type extract train train-streaming optuna full-retrain-s1 clean-experiments
+.PHONY: test lint type extract train optuna full-retrain-s1 verify-loader clean-experiments
 
 test:
 	$(PY) pytest -q
@@ -22,16 +22,19 @@ extract:
 	$(PY) python $(EXTRACT)
 
 train:
-	$(PY) python $(TRAIN)
-
-train-streaming:
-	$(PY) python $(TRAIN_STREAMING) --config $(TRAIN_STREAMING_CONFIG) --max-rows $(TRAIN_STREAMING_ROWS)
+	$(PY) python $(TRAIN) --config $(TRAIN_CONFIG) \
+	  $(if $(STREAMING),--streaming,) \
+	  $(if $(TRAIN_MAX_ROWS),--max-rows $(TRAIN_MAX_ROWS),)
 
 optuna:
 	$(PY) python $(OPTUNA) $(OPTUNA_ARGS)
 
 full-retrain-s1: test lint extract train optuna
 	@echo "S1 full retrain complete. See experiments/alpha_s1/<latest>/metrics.json"
+	@echo 'Run `make verify-loader RUN_DIR=experiments/alpha_s1/<latest>` to confirm load_predictor_from_run succeeds.'
+
+verify-loader:
+	$(PY) python -c "from pathlib import Path; from quant_research_stack.alpha.inference import load_predictor_from_run; p = load_predictor_from_run(Path('$(RUN_DIR)')); print('OK; n_features =', len(p.expected_feature_columns))"
 
 clean-experiments:
 	rm -rf experiments/alpha_s1/*
