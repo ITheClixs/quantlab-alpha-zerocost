@@ -41,7 +41,7 @@ def _finbert_runner(model_dir: Path) -> callable:
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description="Cache FinBERT-style sentiment features for the corpus.")
     p.add_argument("--input-jsonl", default="data/processed/research/research_corpus.jsonl")
-    p.add_argument("--model-dir", default="models/huggingface/ProsusAI__finbert")
+    p.add_argument("--model-dir", default="models/huggingface/hasnain43__bert-stock-sentiment-v1")
     p.add_argument("--output-parquet", default="data/processed/research/finbert_features.parquet")
     p.add_argument("--cache-root", default="data/processed/research/meta_cache")
     p.add_argument("--limit", type=int, default=None)
