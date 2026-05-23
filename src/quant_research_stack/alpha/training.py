@@ -177,6 +177,9 @@ class RunResult:
 
 
 _BASE_MODEL_NAMES: tuple[str, ...] = ("ridge", "lgb", "xgb", "cat", "mlp", "seq")
+_STACKER_MAX_ACTIVE_MODELS = 3
+_STACKER_BASELINE_RATIO = 0.75
+_STACKER_MIN_POSITIVE_FOLD_FRACTION = 2.0 / 3.0
 _SECTION_13_ARTIFACT_PATHS: tuple[str, ...] = (
     "metadata.json",
     "predictions.parquet",
@@ -302,12 +305,54 @@ def _fit_stacker(
     y_full: NDArray[np.float64],
     w_full: NDArray[np.float64],
     stacker_alpha: float,
+    fold_metrics: list[dict[str, float]],
 ) -> LinearStacker:
-    """Stack 6 OOF columns in the canonical _BASE_MODEL_NAMES order and fit LinearStacker."""
+    """Stack OOF columns with fold-stable active learners and calibrated residual scale."""
     stack_x = np.column_stack([oof_by_name[n] for n in _BASE_MODEL_NAMES])
     stacker = LinearStacker(alpha=stacker_alpha, feature_order=list(_BASE_MODEL_NAMES))
-    stacker.fit(stack_x, y_full, w_full)
+    stacker.fit(
+        stack_x,
+        y_full,
+        w_full,
+        active_feature_order=_select_active_stack_models(fold_metrics),
+    )
     return stacker
+
+
+def _select_active_stack_models(fold_metrics: list[dict[str, float]]) -> list[str]:
+    """Select a conservative fold-stable base subset for noisy financial labels.
+
+    Ridge remains the baseline anchor. Non-ridge learners must be positive on enough
+    folds and clear a baseline-relative mean R² floor; only the top two are admitted.
+    This blocks high-variance learners from receiving positive stack weight just
+    because they overfit a subset of OOF folds.
+    """
+    if not fold_metrics:
+        return ["ridge"]
+
+    by_name: dict[str, np.ndarray] = {}
+    for name in _BASE_MODEL_NAMES:
+        by_name[name] = np.asarray([m[f"{name}_r2"] for m in fold_metrics], dtype=np.float64)
+
+    ridge_mean = float(np.mean(by_name["ridge"]))
+    min_mean = max(0.0, ridge_mean * _STACKER_BASELINE_RATIO)
+    candidates: list[tuple[str, float]] = []
+    for name in _BASE_MODEL_NAMES:
+        if name == "ridge":
+            continue
+        values = by_name[name]
+        positive_fraction = float(np.mean(values > 0.0))
+        mean_score = float(np.mean(values))
+        if positive_fraction >= _STACKER_MIN_POSITIVE_FOLD_FRACTION and mean_score >= min_mean:
+            candidates.append((name, mean_score))
+
+    selected = {
+        name
+        for name, _ in sorted(candidates, key=lambda item: item[1], reverse=True)[
+            : _STACKER_MAX_ACTIVE_MODELS - 1
+        ]
+    }
+    return [name for name in _BASE_MODEL_NAMES if name == "ridge" or name in selected]
 
 
 def _refit_on_full(
@@ -720,6 +765,7 @@ def train_s1(
         y_full=y_full,
         w_full=w_full,
         stacker_alpha=config.stacker_alpha,
+        fold_metrics=fold_metrics,
     )
 
     finals = _refit_on_full(
@@ -757,6 +803,9 @@ def train_s1(
         "fold_metrics": fold_metrics,
         "holdout_weighted_zero_mean_r2": holdout_r2,
         "holdout_per_model_r2": per_model_r2,
+        "stacker_active_models": stacker.active_feature_order,
+        "stacker_weights": dict(zip(stacker.feature_order, stacker.weights().tolist(), strict=True)),
+        "stacker_residual_scale": stacker.residual_scale,
         "n_features_after_adversarial": len(feature_cols),
         "n_features_after_noise_floor": len(feature_cols),
         "training_rows": int(n),

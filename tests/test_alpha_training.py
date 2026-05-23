@@ -27,6 +27,7 @@ from quant_research_stack.alpha.training import (
     XGBoostModelConfig,
     _fit_one_fold,
     _load_and_split,
+    _select_active_stack_models,
     train_s1,
 )
 
@@ -102,6 +103,40 @@ def test_fit_one_fold_returns_six_base_predictions():
     for name, preds in fold_oof.items():
         assert preds.shape == (te_idx.size,), f"{name} returned shape {preds.shape}"
         assert preds.dtype == np.float64
+
+
+def test_select_active_stack_models_keeps_fold_stable_top_models():
+    fold_metrics = [
+        {
+            "fold": 0.0,
+            "ridge_r2": 0.0061,
+            "lgb_r2": 0.0089,
+            "xgb_r2": 0.0058,
+            "cat_r2": 0.0091,
+            "mlp_r2": 0.0050,
+            "seq_r2": 0.0005,
+        },
+        {
+            "fold": 1.0,
+            "ridge_r2": 0.0027,
+            "lgb_r2": 0.0067,
+            "xgb_r2": 0.0048,
+            "cat_r2": 0.0069,
+            "mlp_r2": 0.0053,
+            "seq_r2": 0.0004,
+        },
+        {
+            "fold": 2.0,
+            "ridge_r2": 0.0028,
+            "lgb_r2": 0.0034,
+            "xgb_r2": 0.0031,
+            "cat_r2": 0.0031,
+            "mlp_r2": -0.0064,
+            "seq_r2": 0.0005,
+        },
+    ]
+
+    assert _select_active_stack_models(fold_metrics) == ["ridge", "lgb", "cat"]
 
 
 def test_train_config_from_yaml_smoke():

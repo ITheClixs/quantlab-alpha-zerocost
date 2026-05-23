@@ -129,12 +129,7 @@ class _BoundStackPredictor:
             model = self.base_models[name]
             base_outs[i] = float(model.predict(x.reshape(1, -1))[0])  # type: ignore[attr-defined]
         pred = float(self.stacker.predict(base_outs.reshape(1, -1))[0])
-        signs = np.sign(base_outs)
-        if signs.size == 0 or float(np.std(base_outs)) == 0.0:
-            conf = 1.0
-        else:
-            mean_sign = np.sign(np.mean(signs))
-            conf = float(np.clip(np.mean(signs == mean_sign), 0.0, 1.0))
+        conf = float(self.stacker.confidence(base_outs)[0])
         return pred, conf
 
 
