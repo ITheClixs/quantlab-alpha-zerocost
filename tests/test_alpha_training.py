@@ -1,12 +1,94 @@
 from __future__ import annotations
 
+import numpy as np
+
 from quant_research_stack.alpha.training import (
     CVConfig,
+    CatBoostModelConfig,
     DataConfig,
     FeatureConfig,
+    LightGBMModelConfig,
+    MLPModelConfig,
     ModelsConfig,
+    RidgeModelConfig,
+    SequenceModelConfig,
     TrainConfig,
+    XGBoostModelConfig,
+    _fit_one_fold,
 )
+
+
+def _minimal_models_config() -> ModelsConfig:
+    return ModelsConfig(
+        ridge=RidgeModelConfig(alpha=1.0),
+        lightgbm=LightGBMModelConfig(
+            num_leaves=7,
+            max_depth=3,
+            learning_rate=0.1,
+            n_estimators=20,
+            early_stopping_rounds=5,
+            feature_fraction=1.0,
+            bagging_fraction=1.0,
+        ),
+        xgboost=XGBoostModelConfig(
+            max_depth=3,
+            learning_rate=0.1,
+            n_estimators=20,
+            early_stopping_rounds=5,
+            tree_method="hist",
+        ),
+        catboost=CatBoostModelConfig(
+            depth=3,
+            learning_rate=0.1,
+            n_estimators=20,
+            early_stopping_rounds=5,
+        ),
+        mlp=MLPModelConfig(
+            hidden_dims=[8],
+            dropout=0.0,
+            learning_rate=1e-3,
+            batch_size=64,
+            max_epochs=2,
+            patience=2,
+            mixed_precision=False,
+        ),
+        sequence=SequenceModelConfig(
+            kernel_sizes=[3],
+            n_filters=8,
+            dropout=0.0,
+            learning_rate=1e-3,
+            batch_size=64,
+            max_epochs=2,
+            patience=2,
+            random_state=0,
+        ),
+    )
+
+
+def test_fit_one_fold_returns_six_base_predictions():
+    rng = np.random.default_rng(0)
+    x = rng.standard_normal((500, 8))
+    y = x[:, 0] + 0.1 * rng.standard_normal(500)
+    w = np.ones(500)
+    tr_idx = np.arange(0, 400)
+    te_idx = np.arange(400, 500)
+    cfg = _minimal_models_config()
+
+    fold_oof = _fit_one_fold(
+        fold_idx=0,
+        x_tr=x[tr_idx],
+        y_tr=y[tr_idx],
+        w_tr=w[tr_idx],
+        x_te=x[te_idx],
+        y_te=y[te_idx],
+        w_te=w[te_idx],
+        models_config=cfg,
+    )
+
+    assert set(fold_oof.keys()) == {"ridge", "lgb", "xgb", "cat", "mlp", "seq"}
+    for name, preds in fold_oof.items():
+        assert preds.shape == (te_idx.size,), f"{name} returned shape {preds.shape}"
+        assert preds.dtype == np.float64
 
 
 def test_train_config_from_yaml_smoke():
