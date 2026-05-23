@@ -72,7 +72,16 @@ def main() -> int:
         n_folds=cfg["cv"]["n_folds"], group_column="date_id",
         purge=cfg["cv"]["purge_days"], embargo=cfg["cv"]["embargo_days"],
     )
-    folds = list(splitter.split(built))
+    raw_folds = list(splitter.split(built))
+    folds = [(tr, te) for tr, te in raw_folds if tr.size > 0 and te.size > 0]
+    dropped = len(raw_folds) - len(folds)
+    if dropped:
+        console.print(f"[yellow]Dropped {dropped} empty purged folds from Optuna CV.[/yellow]")
+    if not folds:
+        raise RuntimeError(
+            "PurgedKFold produced no non-empty train/test folds; increase --max-rows "
+            "or reduce purge/embargo in the config."
+        )
 
     def objective(trial: optuna.Trial) -> float:
         params = LightGBMConfig(
