@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import hashlib
+import json
 from pathlib import Path
 
 import numpy as np
@@ -256,6 +258,36 @@ def test_train_s1_end_to_end_on_synthetic(synthetic_js, tmp_path):
     assert (result.run_dir / "_artifact_sha256.json").exists()
     assert (result.run_dir / "metrics.json").exists()
     assert (result.run_dir / "predictions.parquet").exists()
+    assert (result.run_dir / "feature_importance.parquet").exists()
+    assert (result.run_dir / "cv_folds.json").exists()
+    assert (result.run_dir / "report.md").exists()
+    assert (result.run_dir / "audit_log_smoke.jsonl").exists()
+    artifact_index = json.loads((result.run_dir / "_artifact_sha256.json").read_text())
+    section_13_artifacts = [
+        "metadata.json",
+        "predictions.parquet",
+        "metrics.json",
+        "feature_importance.parquet",
+        "cv_folds.json",
+        "feature_cols.json",
+        "models/ridge.joblib",
+        "models/lightgbm.txt",
+        "models/lightgbm.config.json",
+        "models/xgboost.json",
+        "models/xgboost.config.json",
+        "models/catboost.cbm",
+        "models/catboost.config.json",
+        "models/mlp.pt",
+        "models/sequence.pt",
+        "models/stacker.joblib",
+        "report.md",
+        "audit_log_smoke.jsonl",
+    ]
+    assert set(section_13_artifacts).issubset(artifact_index)
+    for rel_path in section_13_artifacts:
+        assert artifact_index[rel_path] == hashlib.sha256(
+            (result.run_dir / rel_path).read_bytes()
+        ).hexdigest()
 
     # Loader returns a working predictor.
     predictor = load_predictor_from_run(result.run_dir)

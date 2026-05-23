@@ -14,6 +14,7 @@ import hashlib
 import json
 import subprocess
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Literal
 
@@ -176,6 +177,26 @@ class RunResult:
 
 
 _BASE_MODEL_NAMES: tuple[str, ...] = ("ridge", "lgb", "xgb", "cat", "mlp", "seq")
+_SECTION_13_ARTIFACT_PATHS: tuple[str, ...] = (
+    "metadata.json",
+    "predictions.parquet",
+    "metrics.json",
+    "feature_importance.parquet",
+    "cv_folds.json",
+    "feature_cols.json",
+    "models/ridge.joblib",
+    "models/lightgbm.txt",
+    "models/lightgbm.config.json",
+    "models/xgboost.json",
+    "models/xgboost.config.json",
+    "models/catboost.cbm",
+    "models/catboost.config.json",
+    "models/mlp.pt",
+    "models/sequence.pt",
+    "models/stacker.joblib",
+    "report.md",
+    "audit_log_smoke.jsonl",
+)
 
 
 def _fit_one_fold(
@@ -388,6 +409,137 @@ def _sha256_file(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+def _update_artifact_sha_index(run_dir: Path) -> None:
+    sha_index_path = run_dir / "_artifact_sha256.json"
+    existing_index: dict[str, str] = {}
+    if sha_index_path.exists():
+        existing_index = json.loads(sha_index_path.read_text())
+
+    sha_index = {
+        rel_path: digest
+        for rel_path, digest in existing_index.items()
+        if rel_path not in _SECTION_13_ARTIFACT_PATHS
+    }
+
+    for rel_path in _SECTION_13_ARTIFACT_PATHS:
+        artifact_path = run_dir / rel_path
+        if artifact_path.is_file():
+            sha_index[rel_path] = _sha256_file(artifact_path)
+
+    sha_index_path.write_text(json.dumps(sha_index, indent=2, sort_keys=True))
+
+
+def _write_run_sidecars(
+    *,
+    run_id: str,
+    run_dir: Path,
+    feature_cols: list[str],
+    finals: dict[str, object],
+    config: TrainConfig,
+    training_rows: int,
+    holdout_rows: int,
+    fold_metrics: list[dict[str, float]],
+    holdout_r2: float,
+    per_model_r2: dict[str, float],
+) -> None:
+    lgb_model = finals["lgb"]
+    if not isinstance(lgb_model, LightGBMAlphaModel):
+        raise TypeError("expected final lgb model to be LightGBMAlphaModel")
+    lgb_importance = lgb_model.feature_importance()
+    if lgb_importance.shape[0] != len(feature_cols):
+        raise RuntimeError(
+            "LightGBM feature importance length does not match feature column count"
+        )
+    pl.DataFrame(
+        {
+            "feature": feature_cols,
+            "lgb_importance": lgb_importance.astype(np.float64),
+            "kept_after_noise_floor": [True] * len(feature_cols),
+        }
+    ).write_parquet(run_dir / "feature_importance.parquet")
+
+    fold_size = training_rows // config.cv.n_folds
+    folds = []
+    for fold_idx in range(config.cv.n_folds):
+        te_start = fold_idx * fold_size
+        te_end = (
+            (fold_idx + 1) * fold_size
+            if fold_idx < config.cv.n_folds - 1
+            else training_rows
+        )
+        folds.append(
+            {
+                "fold": fold_idx,
+                "test_start_row": te_start,
+                "test_end_row_exclusive": te_end,
+                "train_rows": training_rows - (te_end - te_start),
+                "test_rows": te_end - te_start,
+            }
+        )
+    (run_dir / "cv_folds.json").write_text(
+        json.dumps(
+            {
+                "n_folds": config.cv.n_folds,
+                "purge_days": config.cv.purge_days,
+                "embargo_days": config.cv.embargo_days,
+                "group_column": config.data.group_column,
+                "training_rows": training_rows,
+                "holdout_rows": holdout_rows,
+                "folds": folds,
+            },
+            indent=2,
+            sort_keys=True,
+        )
+    )
+
+    (run_dir / "report.md").write_text(
+        "\n".join(
+            [
+                f"# S1 Training Report: {run_id}",
+                "",
+                f"- Holdout weighted zero-mean R2: {holdout_r2:.6f}",
+                f"- Training rows: {training_rows}",
+                f"- Holdout rows: {holdout_rows}",
+                f"- Feature count: {len(feature_cols)}",
+                f"- Base models: {', '.join(_BASE_MODEL_NAMES)}",
+                "",
+                "## Per-Model Holdout R2",
+                "",
+                *[
+                    f"- {name}: {score:.6f}"
+                    for name, score in sorted(per_model_r2.items())
+                ],
+                "",
+                "## Fold Metrics",
+                "",
+                "```json",
+                json.dumps(fold_metrics, indent=2, sort_keys=True),
+                "```",
+                "",
+                "## Limitations",
+                "",
+                "- Synthetic or capped-row smoke runs are not production evidence.",
+                "- Post-S0 full retrain acceptance still requires the runbook gate.",
+                "",
+            ]
+        )
+    )
+
+    audit_record = {
+        "event": "s1_train_complete",
+        "not_investment_advice": True,
+        "payload": {
+            "run_id": run_id,
+            "holdout_weighted_zero_mean_r2": holdout_r2,
+            "training_rows": training_rows,
+            "holdout_rows": holdout_rows,
+            "base_models": list(_BASE_MODEL_NAMES),
+        },
+        "timestamp_utc": datetime.now(UTC).isoformat(),
+    }
+    (run_dir / "audit_log_smoke.jsonl").write_text(json.dumps(audit_record) + "\n")
+
+
 def _persist_run(
     *,
     run_dir: Path,
@@ -423,22 +575,7 @@ def _persist_run(
         )
     )
 
-    sha_index_path = run_dir / "_artifact_sha256.json"
-    sha_index: dict[str, str] = {}
-    if sha_index_path.exists():
-        sha_index = json.loads(sha_index_path.read_text())
-    sha_index["feature_cols.json"] = _sha256_file(schema_path)
-    for fname in [
-        "ridge.joblib",
-        "lightgbm.txt",
-        "xgboost.json",
-        "catboost.cbm",
-        "mlp.pt",
-        "sequence.pt",
-        "stacker.joblib",
-    ]:
-        sha_index[f"models/{fname}"] = _sha256_file(models_dir / fname)
-    sha_index_path.write_text(json.dumps(sha_index, indent=2, sort_keys=True))
+    _update_artifact_sha_index(run_dir)
 
 
 def _holdout_eval(
@@ -645,6 +782,19 @@ def train_s1(
     )
     preds_df.write_parquet(run_dir / "predictions.parquet")
 
+    _write_run_sidecars(
+        run_id=run_id,
+        run_dir=run_dir,
+        feature_cols=feature_cols,
+        finals=finals,
+        config=config,
+        training_rows=int(n),
+        holdout_rows=int(x_h.shape[0]),
+        fold_metrics=fold_metrics,
+        holdout_r2=holdout_r2,
+        per_model_r2=per_model_r2,
+    )
+
     _persist_run(
         run_dir=run_dir,
         finals=finals,
@@ -664,5 +814,3 @@ def train_s1(
         stacker_path=run_dir / "models" / "stacker.joblib",
         feature_cols_path=run_dir / "feature_cols.json",
     )
-
-
