@@ -104,9 +104,12 @@ class Conv1DAlphaModel:
             torch.tensor(w_train, dtype=torch.float32),
         )
         train_loader = DataLoader(train_ds, batch_size=self.config.batch_size, shuffle=True)
-        vx = torch.tensor(x_val_3d, dtype=torch.float32).to(self._dev)
-        vy = torch.tensor(y_val, dtype=torch.float32).to(self._dev)
-        vw = torch.tensor(w_val, dtype=torch.float32).to(self._dev)
+        val_ds = TensorDataset(
+            torch.tensor(x_val_3d, dtype=torch.float32),
+            torch.tensor(y_val, dtype=torch.float32),
+            torch.tensor(w_val, dtype=torch.float32),
+        )
+        val_loader = DataLoader(val_ds, batch_size=self.config.batch_size, shuffle=False)
         best, stalls = float("inf"), 0
         for _ in range(self.config.max_epochs):
             self._net.train()
@@ -120,9 +123,17 @@ class Conv1DAlphaModel:
                 loss.backward()
                 opt.step()
             self._net.eval()
+            loss_sum = 0.0
+            n_obs = 0
             with torch.no_grad():
-                vp = self._net(vx)
-                vloss = float((vw * (vp - vy) ** 2).mean().item())
+                for xb, yb, wb in val_loader:
+                    xb = xb.to(self._dev)
+                    yb = yb.to(self._dev)
+                    wb = wb.to(self._dev)
+                    vp = self._net(xb)
+                    loss_sum += float((wb * (vp - yb) ** 2).sum().item())
+                    n_obs += int(yb.numel())
+            vloss = loss_sum / max(n_obs, 1)
             if vloss < best - 1e-6:
                 best = vloss
                 stalls = 0
@@ -150,9 +161,17 @@ class Conv1DAlphaModel:
         x_3d = x_scaled[:, :, np.newaxis]
 
         self._net.eval()
+        pred_loader = DataLoader(
+            TensorDataset(torch.tensor(x_3d, dtype=torch.float32)),
+            batch_size=self.config.batch_size,
+            shuffle=False,
+        )
+        outs: list[np.ndarray] = []
         with torch.no_grad():
-            out = self._net(torch.tensor(x_3d, dtype=torch.float32).to(self._dev))
-        return out.detach().cpu().numpy().astype(np.float64)
+            for (xb,) in pred_loader:
+                out = self._net(xb.to(self._dev))
+                outs.append(out.detach().cpu().numpy().astype(np.float64))
+        return np.concatenate(outs) if outs else np.zeros(0, dtype=np.float64)
 
     def save(self, path: Path) -> None:
         path = Path(path)

@@ -97,9 +97,12 @@ class MLPAlphaModel:
             torch.tensor(w_train, dtype=torch.float32),
         )
         train_loader = DataLoader(train_ds, batch_size=self.config.batch_size, shuffle=True)
-        val_x = torch.tensor(x_val_scaled, dtype=torch.float32).to(self._device)
-        val_y = torch.tensor(y_val, dtype=torch.float32).to(self._device)
-        val_w = torch.tensor(w_val, dtype=torch.float32).to(self._device)
+        val_ds = TensorDataset(
+            torch.tensor(x_val_scaled, dtype=torch.float32),
+            torch.tensor(y_val, dtype=torch.float32),
+            torch.tensor(w_val, dtype=torch.float32),
+        )
+        val_loader = DataLoader(val_ds, batch_size=self.config.batch_size, shuffle=False)
         best_val = float("inf")
         stalls = 0
         for _epoch in range(self.config.max_epochs):
@@ -114,9 +117,17 @@ class MLPAlphaModel:
                 loss.backward()
                 opt.step()
             self._net.eval()
+            loss_sum = 0.0
+            n_obs = 0
             with torch.no_grad():
-                vp = self._net(val_x)
-                vloss = float((val_w * (vp - val_y) ** 2).mean().item())
+                for xb, yb, wb in val_loader:
+                    xb = xb.to(self._device)
+                    yb = yb.to(self._device)
+                    wb = wb.to(self._device)
+                    vp = self._net(xb)
+                    loss_sum += float((wb * (vp - yb) ** 2).sum().item())
+                    n_obs += int(yb.numel())
+            vloss = loss_sum / max(n_obs, 1)
             if vloss < best_val - 1e-6:
                 best_val = vloss
                 stalls = 0
@@ -132,9 +143,17 @@ class MLPAlphaModel:
             raise RuntimeError("call fit() first")
         x_scaled = self._scaler.transform(np.asarray(x, dtype=np.float64)).astype(np.float32)
         self._net.eval()
+        pred_loader = DataLoader(
+            TensorDataset(torch.tensor(x_scaled, dtype=torch.float32)),
+            batch_size=self.config.batch_size,
+            shuffle=False,
+        )
+        outs: list[np.ndarray] = []
         with torch.no_grad():
-            out = self._net(torch.tensor(x_scaled, dtype=torch.float32).to(self._device))
-        return out.detach().cpu().numpy().astype(np.float64)
+            for (xb,) in pred_loader:
+                out = self._net(xb.to(self._device))
+                outs.append(out.detach().cpu().numpy().astype(np.float64))
+        return np.concatenate(outs) if outs else np.zeros(0, dtype=np.float64)
 
     def save(self, path: Path) -> None:
         path = Path(path)
