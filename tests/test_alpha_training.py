@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 
 import numpy as np
+import polars as pl
 import yaml
 
 from quant_research_stack.alpha.inference import (
@@ -25,6 +26,7 @@ from quant_research_stack.alpha.training import (
     TrainConfig,
     XGBoostModelConfig,
     _fit_one_fold,
+    _load_and_split,
     train_s1,
 )
 
@@ -186,6 +188,36 @@ def test_train_config_rejects_bad_alpha():
 
     with pytest.raises(ValidationError):
         RidgeModelConfig(alpha=-1.0)  # alpha must be > 0
+
+
+def test_streaming_load_and_split_honors_row_budget(tmp_path: Path):
+    df = pl.DataFrame(
+        {
+            "date_id": np.repeat(np.arange(10), 5),
+            "feature_00": np.arange(50, dtype=np.float64),
+            "responder_6": np.arange(50, dtype=np.float64) * 0.01,
+            "weight": np.ones(50, dtype=np.float64),
+        }
+    )
+    parquet_path = tmp_path / "js.parquet"
+    df.write_parquet(parquet_path)
+
+    cfg_dict = _train_config_for_synthetic(tmp_path)
+    cfg_dict["data"]["jane_street_root"] = str(parquet_path)
+    cfg_dict["data"]["max_rows"] = 50
+    cfg_dict["streaming"] = True
+    cfg_dict["max_rows_streaming"] = 20
+    cfg = TrainConfig.from_dict(cfg_dict)
+
+    train_df, holdout_df, feature_cols = _load_and_split(
+        config=cfg,
+        synthetic_dataframe=None,
+    )
+
+    assert feature_cols == ["feature_00"]
+    assert train_df.height + holdout_df.height < df.height
+    assert train_df["date_id"].min() >= 5
+    assert holdout_df["date_id"].max() == 9
 
 
 def _train_config_for_synthetic(tmp_path: Path) -> dict:

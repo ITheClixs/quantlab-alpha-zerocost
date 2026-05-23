@@ -613,7 +613,11 @@ def _load_and_split(
     if synthetic_dataframe is not None:
         df = synthetic_dataframe
     else:
-        from quant_research_stack.alpha.io import LoadConfig, load_jane_street
+        from quant_research_stack.alpha.io import (
+            LoadConfig,
+            scan_jane_street,
+            select_tail_by_row_budget,
+        )
 
         load_cfg = LoadConfig(
             target_column=config.data.target_column,
@@ -621,7 +625,13 @@ def _load_and_split(
             group_column=config.data.group_column,
             holdout_fraction=config.data.permanent_holdout_fraction,
         )
-        df = load_jane_street(config.data.jane_street_root, load_cfg)
+        row_budget = config.max_rows_streaming if config.streaming else config.data.max_rows
+        lf = scan_jane_street(config.data.jane_street_root, load_cfg)
+        df = select_tail_by_row_budget(
+            lf,
+            config.data.group_column,
+            max_rows=row_budget,
+        )
 
     group_col = config.data.group_column
 

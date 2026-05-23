@@ -38,7 +38,7 @@ def parse_args() -> argparse.Namespace:
         "--max-rows",
         type=int,
         default=None,
-        help="override max_rows_streaming when --streaming is set",
+        help="override the training row budget",
     )
     parser.add_argument("--experiments-root", default="experiments/alpha_s1")
     return parser.parse_args()
@@ -59,6 +59,7 @@ def main() -> int:
     if args.streaming:
         cfg_dict["streaming"] = True
     if args.max_rows is not None:
+        cfg_dict.setdefault("data", {})["max_rows"] = args.max_rows
         cfg_dict["max_rows_streaming"] = args.max_rows
 
     config = TrainConfig.from_dict(cfg_dict)
