@@ -333,9 +333,12 @@ def run_long_short_signal_backtest(
     selection_fraction: float = 0.10,
     cost_bps: float = 5.0,
     max_symbols_per_side: int | None = None,
+    rebalance_every_n_days: int = 1,
 ) -> EquitySignalBacktestResult:
     if not 0.0 < selection_fraction <= 0.5:
         raise ValueError("selection_fraction must be in (0, 0.5]")
+    if rebalance_every_n_days < 1:
+        raise ValueError("rebalance_every_n_days must be >= 1")
     clean = _clean_signal_frame(frame, prediction_column=prediction_column, target_column=target_column)
     if date_column not in clean.columns:
         raise ValueError(f"missing date column: {date_column}")
@@ -343,23 +346,34 @@ def run_long_short_signal_backtest(
     equity = float(starting_equity)
     gross_equity = float(starting_equity)
     rows: list[dict[str, float | int | str]] = []
-    for group in clean.sort(date_column).partition_by(date_column, maintain_order=True):
+    held_longs: set[str] = set()
+    held_shorts: set[str] = set()
+    n_rebalances = 0
+    groups = clean.sort(date_column).partition_by(date_column, maintain_order=True)
+    for day_index, group in enumerate(groups):
         if group.height < 2:
             continue
-        n_select = max(1, int(math.floor(group.height * selection_fraction)))
-        n_select = min(n_select, max(1, group.height // 2))
-        if max_symbols_per_side is not None:
-            n_select = min(n_select, max_symbols_per_side)
-        if n_select <= 0:
+        is_rebalance = day_index % rebalance_every_n_days == 0 or not held_longs or not held_shorts
+        if is_rebalance:
+            n_select = max(1, int(math.floor(group.height * selection_fraction)))
+            n_select = min(n_select, max(1, group.height // 2))
+            if max_symbols_per_side is not None:
+                n_select = min(n_select, max_symbols_per_side)
+            if n_select <= 0:
+                continue
+            ordered = group.sort(prediction_column, descending=True)
+            held_longs = set(ordered.head(n_select)["symbol"].cast(pl.Utf8).to_list())
+            held_shorts = set(ordered.tail(n_select)["symbol"].cast(pl.Utf8).to_list())
+            n_rebalances += 1
+        longs = group.filter(pl.col("symbol").cast(pl.Utf8).is_in(held_longs))
+        shorts = group.filter(pl.col("symbol").cast(pl.Utf8).is_in(held_shorts))
+        if longs.is_empty() or shorts.is_empty():
             continue
-        ordered = group.sort(prediction_column, descending=True)
-        longs = ordered.head(n_select)
-        shorts = ordered.tail(n_select)
         long_ret = float(cast(float, longs[target_column].mean()))
         short_ret = float(cast(float, shorts[target_column].mean()))
         gross_return = 0.5 * long_ret - 0.5 * short_ret
-        # Daily dollar-neutral rebalance: enter and exit one gross notional unit per day.
-        turnover = 2.0
+        # Dollar-neutral basket: charge full enter/exit gross notional only on rebalance days.
+        turnover = 2.0 if is_rebalance else 0.0
         cost_return = turnover * cost_bps * 1e-4
         net_return = gross_return - cost_return
         gross_equity *= 1.0 + gross_return
@@ -376,6 +390,7 @@ def run_long_short_signal_backtest(
                 "cost_return": cost_return,
                 "net_return": net_return,
                 "turnover": turnover,
+                "rebalanced": int(is_rebalance),
                 "gross_equity": gross_equity,
                 "equity": equity,
             }
@@ -393,6 +408,7 @@ def run_long_short_signal_backtest(
                 "cost_return": [],
                 "net_return": [],
                 "turnover": [],
+                "rebalanced": [],
                 "gross_equity": [],
                 "equity": [],
             }
@@ -409,6 +425,8 @@ def run_long_short_signal_backtest(
                 "max_drawdown": 0.0,
                 "hit_rate": 0.0,
                 "avg_daily_turnover": 0.0,
+                "rebalance_every_n_days": rebalance_every_n_days,
+                "n_rebalances": 0,
             },
         )
 
@@ -431,6 +449,8 @@ def run_long_short_signal_backtest(
         "max_drawdown": _max_drawdown_from_returns(net_returns.tolist()),
         "hit_rate": float(np.mean(net_returns > 0.0)),
         "avg_daily_turnover": float(cast(float, curve["turnover"].mean())),
+        "rebalance_every_n_days": rebalance_every_n_days,
+        "n_rebalances": int(n_rebalances),
         "avg_daily_net_return": mu,
         "avg_daily_gross_return": float(cast(float, curve["gross_return"].mean())),
     }

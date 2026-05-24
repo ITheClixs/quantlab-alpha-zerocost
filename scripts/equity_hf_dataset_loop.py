@@ -222,6 +222,7 @@ def _write_report(
         f"- Min dollar volume: `{config.min_dollar_volume}`",
         f"- Max abs future return: `{config.max_abs_future_return}`",
         f"- Cost: `{config.cost_bps}` bps one-way",
+        f"- Rebalance every N days: `{config.rebalance_every_n_days}`",
         f"- Selection fraction: `{config.selection_fraction:.2%}`",
         f"- Target avg monthly net return: `{target_avg_monthly_net_return}`",
         f"- Target total return: `{target_total_return}`",
@@ -309,6 +310,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--hist-gradient-max-iter", type=int, default=40)
     parser.add_argument("--selection-fraction", type=float, default=0.10)
     parser.add_argument("--cost-bps", type=float, default=5.0)
+    parser.add_argument("--rebalance-every-n-days", type=int, default=1)
     parser.add_argument("--starting-equity", type=float, default=100_000.0)
     parser.add_argument("--max-symbols-per-side", type=int, default=None)
     parser.add_argument("--no-save-predictions", action="store_true")
@@ -337,6 +339,7 @@ def main() -> int:
         hist_gradient_max_iter=args.hist_gradient_max_iter,
         selection_fraction=args.selection_fraction,
         cost_bps=args.cost_bps,
+        rebalance_every_n_days=args.rebalance_every_n_days,
         starting_equity=args.starting_equity,
         max_symbols_per_side=args.max_symbols_per_side,
         max_rows_per_dataset=args.max_rows_per_dataset,

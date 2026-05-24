@@ -105,6 +105,39 @@ def test_long_short_backtest_is_cost_aware() -> None:
     assert costly.metrics["cost_drag_return"] > 0.0
 
 
+def test_long_short_backtest_can_rebalance_less_often_to_reduce_turnover() -> None:
+    frame = pl.DataFrame(
+        {
+            "date": [
+                "2024-01-02",
+                "2024-01-02",
+                "2024-01-03",
+                "2024-01-03",
+                "2024-01-04",
+                "2024-01-04",
+                "2024-01-05",
+                "2024-01-05",
+            ],
+            "symbol": ["A", "B", "A", "B", "A", "B", "A", "B"],
+            "prediction": [0.5, -0.5, 0.4, -0.4, 0.3, -0.3, 0.2, -0.2],
+            "future_return_1": [0.02, -0.01, 0.03, -0.02, 0.01, -0.01, 0.04, -0.02],
+        }
+    )
+
+    daily = run_long_short_signal_backtest(frame, cost_bps=10.0, selection_fraction=0.5)
+    slower = run_long_short_signal_backtest(
+        frame,
+        cost_bps=10.0,
+        selection_fraction=0.5,
+        rebalance_every_n_days=2,
+    )
+
+    assert daily.metrics["n_rebalances"] == 4
+    assert slower.metrics["n_rebalances"] == 2
+    assert slower.metrics["avg_daily_turnover"] < daily.metrics["avg_daily_turnover"]
+    assert slower.metrics["cost_drag_return"] < daily.metrics["cost_drag_return"]
+
+
 def test_predict_signal_frame_uses_persisted_feature_order(tmp_path: Path) -> None:
     x = [[1.0, 10.0], [2.0, 20.0], [3.0, 30.0]]
     y = [0.1, 0.2, 0.3]

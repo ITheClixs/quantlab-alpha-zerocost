@@ -126,4 +126,5 @@ def test_run_dataset_candidate_selects_best_model_and_monthly_metrics(tmp_path: 
     assert result.status == "ok"
     assert result.best_model in {"ridge", "hist_gradient", "ensemble_mean"}
     assert result.monthly_metrics[result.best_model]["months"] >= 1
+    assert result.backtest_metrics[result.best_model]["rebalance_every_n_days"] == 1
     assert (tmp_path / "out" / "models" / f"{result.best_model}.joblib").exists()

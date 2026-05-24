@@ -48,6 +48,7 @@ class EquityDatasetLoopConfig:
     hist_gradient_max_iter: int = 40
     selection_fraction: float = 0.10
     cost_bps: float = 5.0
+    rebalance_every_n_days: int = 1
     starting_equity: float = 100_000.0
     max_symbols_per_side: int | None = None
     max_rows_per_dataset: int | None = None
@@ -375,6 +376,7 @@ def run_dataset_candidate(
                 starting_equity=config.starting_equity,
                 selection_fraction=config.selection_fraction,
                 cost_bps=config.cost_bps,
+                rebalance_every_n_days=config.rebalance_every_n_days,
                 max_symbols_per_side=config.max_symbols_per_side,
             )
             backtest_metrics[model_name] = bt.metrics
