@@ -129,6 +129,12 @@ datasets:
     license_hint: mit
     purpose: "Recent S&P 500 daily candle data for fresh holdout tests."
 
+  - id: HexQuant/Stocks-Daily-Price
+    group: us_equity_market
+    priority: 525
+    license_hint: unknown
+    purpose: "Broad US stock daily OHLCV candidate for cross-sectional walk-forward signal training."
+
   - id: gauss314/options-IV-SP500
     group: sp500_options
     priority: 530
