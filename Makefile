@@ -116,3 +116,33 @@ VALIDATION_DATE ?= $(shell date -u +%Y-%m-%d)
 tv-validation-report:
 	$(PY) python $(TV_VALIDATION_REPORT) --date $(VALIDATION_DATE) \
 	  --config configs/validation.yaml --stage paper
+
+# ----- S1-EQ -----
+
+prepare-equity-data:
+	PYTHONPATH=src uv run python scripts/prepare_equity_data.py \
+		--config configs/alpha_eq.yaml
+
+pit-quality-audit:
+	PYTHONPATH=src uv run python scripts/pit_quality_audit.py \
+		--equity-root data/processed/equities
+
+fast-retrain-s1-eq:
+	PYTHONPATH=src uv run python scripts/train_s1_eq.py \
+		--config configs/alpha_eq.yaml --mode fast_v1
+
+full-retrain-s1-eq:
+	PYTHONPATH=src uv run python scripts/train_s1_eq.py \
+		--config configs/alpha_eq.yaml --mode full_v1
+
+backtest-s1-eq-standard:
+	PYTHONPATH=src uv run python scripts/backtest_s1_eq.py \
+		--config configs/backtest_eq.yaml --mode standard
+
+backtest-s1-eq-audit:
+	PYTHONPATH=src uv run python scripts/backtest_s1_eq.py \
+		--config configs/backtest_eq.yaml --mode audit
+
+js-overlay-compare-s1-eq:
+	PYTHONPATH=src uv run python scripts/s1_eq_overlay_compare.py \
+		--config configs/backtest_eq.yaml

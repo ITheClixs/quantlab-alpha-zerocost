@@ -1,0 +1,46 @@
+# Focused mega-cap reporting basket. Versioned per spec §6.7.
+version: 1
+description: |
+  Liquid US mega-cap cohort for the S1-EQ reporting view. Changing the
+  symbol list requires bumping the version and creating a new run_id.
+symbols:
+  - AAPL
+  - ORCL
+  - PYPL
+  - INTC
+  - META
+  - TSLA
+  - QCOM
+  - PLTR
+  - GOOGL
+  - AVGO
+  - ADBE
+  - RKLB
+  - MSFT
+  - AMZN
+  - NVDA
+  - GOOG
+  - NFLX
+  - AMD
+  - CRM
+  - CSCO
+  - IBM
+  - TXN
+  - MU
+  - LRCX
+  - AMAT
+  - JPM
+  - BAC
+  - GS
+  - MS
+  - V
+  - MA
+  - JNJ
+  - PFE
+  - UNH
+  - WMT
+  - HD
+  - COST
+  - PG
+  - KO
+  - PEP
