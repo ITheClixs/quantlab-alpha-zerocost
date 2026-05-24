@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import json
 import math
+from collections import defaultdict
 from collections.abc import Iterable
 from dataclasses import dataclass
+from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import Any, cast
 
@@ -286,6 +288,83 @@ def _safe_corr(a: NDArray[np.float64], b: NDArray[np.float64]) -> float:
     return 0.0 if math.isnan(value) else value
 
 
+def _sharpe_ratio(returns: NDArray[np.float64], *, annualization: float) -> float:
+    if returns.size < 2:
+        return 0.0
+    mean = float(np.mean(returns))
+    std = float(np.std(returns, ddof=1))
+    if std <= 0.0 or not math.isfinite(std):
+        if mean > 0.0:
+            return 1_000_000.0
+        if mean < 0.0:
+            return -1_000_000.0
+        return 0.0
+    value = float(mean / std * math.sqrt(annualization))
+    return value if math.isfinite(value) else 0.0
+
+
+def _date_key(value: Any) -> str | None:
+    if isinstance(value, datetime):
+        return value.date().isoformat()
+    if isinstance(value, date):
+        return value.isoformat()
+    if isinstance(value, (int, float)) and math.isfinite(float(value)):
+        raw = float(value)
+        magnitude = abs(raw)
+        if magnitude > 1e17:
+            seconds = raw / 1e9
+        elif magnitude > 1e14:
+            seconds = raw / 1e6
+        elif magnitude > 1e11:
+            seconds = raw / 1e3
+        elif magnitude > 1e9:
+            seconds = raw
+        else:
+            return None
+        try:
+            return datetime.fromtimestamp(seconds, tz=UTC).date().isoformat()
+        except (OSError, OverflowError, ValueError):
+            return None
+    if isinstance(value, str) and len(value) >= 10:
+        token = value[:10]
+        try:
+            return date.fromisoformat(token).isoformat()
+        except ValueError:
+            return None
+    return None
+
+
+def _daily_returns(
+    trades: pl.DataFrame,
+    *,
+    event_time_column: str,
+    net_return_column: str,
+) -> NDArray[np.float64]:
+    if event_time_column not in trades.columns or net_return_column not in trades.columns:
+        return np.asarray([], dtype=np.float64)
+    by_day: dict[str, list[float]] = defaultdict(list)
+    for raw_time, raw_return in zip(
+        trades[event_time_column].to_list(),
+        trades[net_return_column].to_list(),
+        strict=False,
+    ):
+        day = _date_key(raw_time)
+        if day is None:
+            continue
+        try:
+            ret = float(raw_return)
+        except (TypeError, ValueError):
+            continue
+        if math.isfinite(ret):
+            by_day[day].append(ret)
+    if not by_day:
+        return np.asarray([], dtype=np.float64)
+    return np.asarray(
+        [float(np.prod(np.asarray(day_returns, dtype=np.float64) + 1.0) - 1.0) for _, day_returns in sorted(by_day.items())],
+        dtype=np.float64,
+    )
+
+
 def _clean_prediction_frame(frame: pl.DataFrame, config: OrderBookBacktestConfig) -> pl.DataFrame:
     required = {config.prediction_column, config.target_column, config.relative_spread_column}
     missing = required - set(frame.columns)
@@ -352,6 +431,10 @@ def run_orderbook_signal_backtest(
                 "avg_trade_gross_return": 0.0,
                 "avg_trade_net_return": 0.0,
                 "avg_trade_cost_return": 0.0,
+                "per_trade_sharpe_ratio": 0.0,
+                "trade_sharpe_ratio": 0.0,
+                "daily_sharpe_ratio": 0.0,
+                "daily_return_count": 0,
                 "candidate_count": 0,
                 "filtered_count": 0,
                 "ending_equity": cfg.starting_equity,
@@ -404,6 +487,10 @@ def run_orderbook_signal_backtest(
                 "avg_trade_gross_return": 0.0,
                 "avg_trade_net_return": 0.0,
                 "avg_trade_cost_return": 0.0,
+                "per_trade_sharpe_ratio": 0.0,
+                "trade_sharpe_ratio": 0.0,
+                "daily_sharpe_ratio": 0.0,
+                "daily_return_count": 0,
                 "candidate_count": candidate_count,
                 "filtered_count": filtered_count,
                 "ending_equity": cfg.starting_equity,
@@ -434,6 +521,11 @@ def run_orderbook_signal_backtest(
     gross_returns = trades["gross_return"].to_numpy().astype(np.float64)
     net_returns = trades["net_return"].to_numpy().astype(np.float64)
     cost_returns = trades["cost_return"].to_numpy().astype(np.float64)
+    daily_returns = _daily_returns(
+        trades,
+        event_time_column=cfg.event_time_column,
+        net_return_column="net_return",
+    )
     total = float(equity / cfg.starting_equity - 1.0)
     gross_total = float(gross_equity / cfg.starting_equity - 1.0)
     metrics = {
@@ -450,6 +542,10 @@ def run_orderbook_signal_backtest(
         "avg_trade_gross_return": float(np.mean(gross_returns)),
         "avg_trade_net_return": float(np.mean(net_returns)),
         "avg_trade_cost_return": float(np.mean(cost_returns)),
+        "per_trade_sharpe_ratio": _sharpe_ratio(net_returns, annualization=1.0),
+        "trade_sharpe_ratio": _sharpe_ratio(net_returns, annualization=float(net_returns.size)),
+        "daily_sharpe_ratio": _sharpe_ratio(daily_returns, annualization=252.0),
+        "daily_return_count": int(daily_returns.size),
         "candidate_count": candidate_count,
         "filtered_count": filtered_count,
         "avg_signal_abs": float(cast(float, trades["signal_abs"].mean())),

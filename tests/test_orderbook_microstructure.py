@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import math
+
 import polars as pl
 import pytest
 
@@ -10,6 +12,7 @@ from quant_research_stack.backtest.orderbook_signal import (
     run_orderbook_signal_backtest,
     run_orderbook_walk_forward,
 )
+from scripts.orderbook_microstructure_benchmark import _best_backtest
 
 
 def test_orderbook_features_from_frame_builds_targets_and_depth_features() -> None:
@@ -76,6 +79,84 @@ def test_orderbook_backtest_charges_spread_and_round_trip_fees() -> None:
     assert result.metrics["avg_trade_cost_return"] == pytest.approx(0.00145)
     assert result.trades["net_return"].round(6).to_list() == [0.0048, 0.0013]
     assert result.metrics["total_return"] > 0.006
+
+
+def test_orderbook_backtest_reports_trade_and_daily_sharpe() -> None:
+    returns = [0.02, 0.01, -0.005]
+    frame = pl.DataFrame(
+        {
+            "symbol": ["BTCUSDT", "BTCUSDT", "BTCUSDT"],
+            "event_time": [1_767_225_600_000, 1_767_312_000_000, 1_767_398_400_000],
+            "prediction": [0.01, 0.01, 0.01],
+            "future_mid_return_1": returns,
+            "relative_spread": [0.0, 0.0, 0.0],
+        }
+    )
+
+    result = run_orderbook_signal_backtest(
+        frame,
+        config=OrderBookBacktestConfig(
+            prediction_column="prediction",
+            target_column="future_mid_return_1",
+            fee_bps=0.0,
+        ),
+    )
+
+    mean_return = sum(returns) / len(returns)
+    std_return = math.sqrt(sum((value - mean_return) ** 2 for value in returns) / (len(returns) - 1))
+    assert result.metrics["per_trade_sharpe_ratio"] == pytest.approx(mean_return / std_return)
+    assert result.metrics["trade_sharpe_ratio"] == pytest.approx(mean_return / std_return * math.sqrt(len(returns)))
+    assert result.metrics["daily_sharpe_ratio"] == pytest.approx(mean_return / std_return * math.sqrt(252.0))
+    assert result.metrics["daily_return_count"] == 3
+
+
+def test_orderbook_backtest_penalizes_constant_losing_sharpe() -> None:
+    frame = pl.DataFrame(
+        {
+            "symbol": ["BTCUSDT", "BTCUSDT", "BTCUSDT"],
+            "event_time": [1_767_225_600_000, 1_767_312_000_000, 1_767_398_400_000],
+            "prediction": [0.01, 0.01, 0.01],
+            "future_mid_return_1": [-0.001, -0.001, -0.001],
+            "relative_spread": [0.0, 0.0, 0.0],
+        }
+    )
+
+    result = run_orderbook_signal_backtest(
+        frame,
+        config=OrderBookBacktestConfig(
+            prediction_column="prediction",
+            target_column="future_mid_return_1",
+            fee_bps=0.0,
+        ),
+    )
+
+    assert result.metrics["trade_sharpe_ratio"] < 0.0
+    assert result.metrics["daily_sharpe_ratio"] < 0.0
+
+
+def test_orderbook_best_backtest_prioritizes_sharpe_before_total_return() -> None:
+    best = _best_backtest(
+        [
+            {
+                "model": "high_return",
+                "trade_count": 10,
+                "daily_sharpe_ratio": 0.2,
+                "trade_sharpe_ratio": 0.3,
+                "total_return": 0.5,
+                "hit_rate": 0.7,
+            },
+            {
+                "model": "high_sharpe",
+                "trade_count": 10,
+                "daily_sharpe_ratio": 1.2,
+                "trade_sharpe_ratio": 1.5,
+                "total_return": 0.05,
+                "hit_rate": 0.6,
+            },
+        ]
+    )
+
+    assert best["model"] == "high_sharpe"
 
 
 def test_orderbook_backtest_filters_predictions_that_do_not_clear_costs() -> None:

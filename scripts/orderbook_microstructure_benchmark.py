@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import subprocess
 import sys
 from dataclasses import asdict
@@ -79,6 +80,15 @@ def _symbols_arg(values: list[str]) -> set[str]:
     return symbols
 
 
+def _date_span_from_paths(paths: list[Path]) -> dict[str, Any]:
+    dates = sorted({match.group(1) for path in paths if (match := re.search(r"(\d{4}-\d{2}-\d{2})", str(path)))})
+    return {
+        "first_date": dates[0] if dates else None,
+        "last_date": dates[-1] if dates else None,
+        "date_count": len(dates),
+    }
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Run a bounded Binance futures order-book microstructure benchmark.")
     parser.add_argument("--raw-root", default="data/raw/huggingface/predict-quant__binance-future-orderbook")
@@ -107,9 +117,13 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def _best_score(row: dict[str, Any]) -> tuple[float, float, float]:
+def _best_score(row: dict[str, Any]) -> tuple[float, float, float, float, float]:
+    daily_sharpe = float(row.get("daily_sharpe_ratio", 0.0))
+    trade_sharpe = float(row.get("trade_sharpe_ratio", 0.0))
     return (
         1.0 if float(row.get("trade_count", 0.0)) > 0.0 else 0.0,
+        daily_sharpe if daily_sharpe != 0.0 else trade_sharpe,
+        trade_sharpe,
         float(row.get("total_return", 0.0)),
         float(row.get("hit_rate", 0.0)),
     )
@@ -146,6 +160,7 @@ def _write_report(
     feature_rows: int,
     feature_symbols: int,
     feature_columns: list[str],
+    feature_date_span: dict[str, Any],
     prediction_summary: dict[str, Any],
     model_metrics: dict[str, dict[str, float | int]],
     backtests: list[dict[str, Any]],
@@ -181,6 +196,7 @@ def _write_report(
         "## Data",
         "",
         f"- Feature files produced: `{len(feature_paths)}`",
+        f"- Feature source date coverage: `{feature_date_span.get('first_date')}` to `{feature_date_span.get('last_date')}` across `{feature_date_span.get('date_count')}` file dates",
         f"- Feature rows loaded: `{feature_rows:,}`",
         f"- Symbols loaded: `{feature_symbols:,}`",
         f"- Prediction rows: `{_fmt(prediction_summary.get('rows', 0))}`",
@@ -215,8 +231,10 @@ def _write_report(
         "",
         "## Costed Backtest Sweep",
         "",
-        "| model | min signal abs | min edge > cost | candidates | filtered | trades | trade rate | hit rate | avg gross/trade | avg cost/trade | avg net/trade | total net | gross total |",
-        "|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|",
+        "Selection prioritizes annualized daily Sharpe when at least two daily returns are available, then event-trade Sharpe, then net return.",
+        "",
+        "| model | min signal abs | min edge > cost | candidates | filtered | trades | daily Sharpe | trade Sharpe | trade rate | hit rate | avg gross/trade | avg cost/trade | avg net/trade | total net | gross total |",
+        "|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|",
     ]
     for row in backtests:
         lines.append(
@@ -229,6 +247,8 @@ def _write_report(
                     _fmt(row.get("candidate_count", 0)),
                     _fmt(row.get("filtered_count", 0)),
                     _fmt(row.get("trade_count", 0)),
+                    _fmt(row.get("daily_sharpe_ratio", 0.0)),
+                    _fmt(row.get("trade_sharpe_ratio", 0.0)),
                     _pct(row.get("trade_rate", 0.0)),
                     _pct(row.get("hit_rate", 0.0)),
                     _pct(row.get("avg_trade_gross_return", 0.0)),
@@ -251,6 +271,9 @@ def _write_report(
             f"- Filtered: `{_fmt(best.get('filtered_count', 0))}`",
             f"- Total net return: `{_pct(best.get('total_return', 0.0))}`",
             f"- Gross total return: `{_pct(best.get('gross_total_return', 0.0))}`",
+            f"- Daily Sharpe: `{_fmt(best.get('daily_sharpe_ratio', 0.0))}`",
+            f"- Event-trade Sharpe: `{_fmt(best.get('trade_sharpe_ratio', 0.0))}`",
+            f"- Daily return count: `{_fmt(best.get('daily_return_count', 0))}`",
             f"- Hit rate: `{_pct(best.get('hit_rate', 0.0))}`",
             f"- Avg net/trade: `{_pct(best.get('avg_trade_net_return', 0.0))}`",
         ]
@@ -280,6 +303,7 @@ def _write_report(
         "",
         "- This is a research benchmark, not a live HFT simulator.",
         "- PnL is based on future midprice markout minus spread crossing and fee assumptions; it does not model queue position, partial fills, latency, exchange rebates, funding, or market impact.",
+        "- Daily Sharpe is annualized from grouped UTC event dates when at least two daily returns are available; event-trade Sharpe is not a calendar annualized live Sharpe.",
         "- Raw Binance depth updates are parsed as observed top-of-book snapshots; this benchmark does not rebuild a full exchange book from deltas.",
         "- `not_investment_advice: true`",
     ]
@@ -391,6 +415,7 @@ def main() -> int:
         "feature_rows": features.height,
         "feature_symbols": feature_symbols,
         "feature_columns": wf.feature_columns,
+        "feature_date_span": _date_span_from_paths(feature_paths),
         "fold_specs": [asdict(spec) for spec in wf.fold_specs],
         "fold_metrics": wf.fold_metrics,
         "prediction_summary": _prediction_summary(wf.predictions),
@@ -411,6 +436,7 @@ def main() -> int:
         feature_rows=features.height,
         feature_symbols=feature_symbols,
         feature_columns=wf.feature_columns,
+        feature_date_span=payload["feature_date_span"],
         prediction_summary=payload["prediction_summary"],
         model_metrics=wf.model_metrics,
         backtests=backtests,
