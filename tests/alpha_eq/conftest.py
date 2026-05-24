@@ -26,12 +26,13 @@ def rng() -> np.random.Generator:
 def synthetic_panel(rng: np.random.Generator) -> pl.DataFrame:
     """Tiny 5-symbol, 50-date synthetic OHLCV panel for unit tests."""
     symbols = ["AAA", "BBB", "CCC", "DDD", "EEE"]
-    dates = pl.date_range(
+    dates_full = pl.date_range(
         start=pl.date(2020, 1, 2),
-        end=pl.date(2020, 3, 13),
+        end=pl.date(2020, 4, 30),
         interval="1d",
         eager=True,
-    ).filter(pl.col("date").dt.weekday() < 6).slice(0, 50)
+    )
+    dates = dates_full.filter(dates_full.dt.weekday() < 6).head(50).to_list()
     rows = []
     for s in symbols:
         price = 100.0
