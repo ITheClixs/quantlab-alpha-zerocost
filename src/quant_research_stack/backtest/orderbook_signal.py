@@ -38,6 +38,9 @@ class OrderBookBacktestConfig:
     event_time_column: str = "event_time"
     relative_spread_column: str = "relative_spread"
     min_signal_abs: float = 0.0
+    min_edge_over_cost: float = 0.0
+    max_relative_spread: float | None = None
+    min_entry_depth: float | None = None
     fee_bps: float = 1.0
     starting_equity: float = 100_000.0
     max_trades: int | None = None
@@ -62,6 +65,9 @@ class OrderBookWalkForwardConfig:
     ridge_alpha: float = 1.0
     hist_gradient_max_iter: int = 80
     min_signal_abs: float = 0.0
+    min_edge_over_cost: float = 0.0
+    max_relative_spread: float | None = None
+    min_entry_depth: float | None = None
     fee_bps: float = 1.0
     starting_equity: float = 100_000.0
 
@@ -317,8 +323,16 @@ def run_orderbook_signal_backtest(
     cfg = config or OrderBookBacktestConfig()
     if cfg.min_signal_abs < 0.0:
         raise ValueError("min_signal_abs must be non-negative")
+    if cfg.min_edge_over_cost < 0.0:
+        raise ValueError("min_edge_over_cost must be non-negative")
+    if cfg.max_relative_spread is not None and cfg.max_relative_spread < 0.0:
+        raise ValueError("max_relative_spread must be non-negative")
+    if cfg.min_entry_depth is not None and cfg.min_entry_depth < 0.0:
+        raise ValueError("min_entry_depth must be non-negative")
     if cfg.fee_bps < 0.0:
         raise ValueError("fee_bps must be non-negative")
+    if cfg.min_entry_depth is not None and not {"bid_depth_1", "ask_depth_1"}.issubset(set(frame.columns)):
+        raise ValueError("min_entry_depth requires bid_depth_1 and ask_depth_1 columns")
 
     clean = _clean_prediction_frame(frame, cfg)
     if clean.is_empty():
@@ -338,6 +352,8 @@ def run_orderbook_signal_backtest(
                 "avg_trade_gross_return": 0.0,
                 "avg_trade_net_return": 0.0,
                 "avg_trade_cost_return": 0.0,
+                "candidate_count": 0,
+                "filtered_count": 0,
                 "ending_equity": cfg.starting_equity,
             },
         )
@@ -345,9 +361,31 @@ def run_orderbook_signal_backtest(
     y_pred = clean[cfg.prediction_column].to_numpy().astype(np.float64)
     y_true = clean[cfg.target_column].to_numpy().astype(np.float64)
     direction_acc = float(np.mean((y_pred > 0.0) == (y_true > 0.0)))
-    trade_frame = clean.filter((pl.col(cfg.prediction_column).abs() >= cfg.min_signal_abs) & (pl.col(cfg.prediction_column) != 0.0))
+    fee_return = 2.0 * cfg.fee_bps * 1e-4
+    candidates = (
+        clean.filter((pl.col(cfg.prediction_column).abs() >= cfg.min_signal_abs) & (pl.col(cfg.prediction_column) != 0.0))
+        .with_columns(
+            [
+                pl.when(pl.col(cfg.prediction_column) > 0.0).then(1.0).otherwise(-1.0).alias("position_side"),
+                pl.col(cfg.prediction_column).abs().alias("signal_abs"),
+                (pl.col(cfg.relative_spread_column) + fee_return).alias("cost_return"),
+            ]
+        )
+        .with_columns((pl.col("signal_abs") - pl.col("cost_return")).alias("predicted_edge_over_cost"))
+    )
+    candidate_count = candidates.height
+    trade_frame = candidates.filter(pl.col("predicted_edge_over_cost") >= cfg.min_edge_over_cost)
+    if cfg.max_relative_spread is not None:
+        trade_frame = trade_frame.filter(pl.col(cfg.relative_spread_column) <= cfg.max_relative_spread)
+    if cfg.min_entry_depth is not None:
+        trade_frame = trade_frame.filter(
+            pl.when(pl.col("position_side") > 0.0)
+            .then(pl.col("ask_depth_1") >= cfg.min_entry_depth)
+            .otherwise(pl.col("bid_depth_1") >= cfg.min_entry_depth)
+        )
     if cfg.max_trades is not None:
         trade_frame = trade_frame.head(cfg.max_trades)
+    filtered_count = candidate_count - trade_frame.height
 
     if trade_frame.is_empty():
         return OrderBookSignalBacktestResult(
@@ -366,20 +404,15 @@ def run_orderbook_signal_backtest(
                 "avg_trade_gross_return": 0.0,
                 "avg_trade_net_return": 0.0,
                 "avg_trade_cost_return": 0.0,
+                "candidate_count": candidate_count,
+                "filtered_count": filtered_count,
                 "ending_equity": cfg.starting_equity,
             },
         )
 
-    fee_return = 2.0 * cfg.fee_bps * 1e-4
     enriched = trade_frame.with_columns(
         [
-            pl.when(pl.col(cfg.prediction_column) > 0.0).then(1.0).otherwise(-1.0).alias("position_side"),
-            (pl.col(cfg.prediction_column).abs()).alias("signal_abs"),
-        ]
-    ).with_columns(
-        [
             (pl.col("position_side") * pl.col(cfg.target_column)).alias("gross_return"),
-            (pl.col(cfg.relative_spread_column) + fee_return).alias("cost_return"),
         ]
     ).with_columns((pl.col("gross_return") - pl.col("cost_return")).alias("net_return"))
 
@@ -417,6 +450,8 @@ def run_orderbook_signal_backtest(
         "avg_trade_gross_return": float(np.mean(gross_returns)),
         "avg_trade_net_return": float(np.mean(net_returns)),
         "avg_trade_cost_return": float(np.mean(cost_returns)),
+        "candidate_count": candidate_count,
+        "filtered_count": filtered_count,
         "avg_signal_abs": float(cast(float, trades["signal_abs"].mean())),
         "ending_equity": equity,
     }
@@ -632,6 +667,8 @@ def run_orderbook_walk_forward(
             "row_index",
             "source_file",
             "relative_spread",
+            "bid_depth_1",
+            "ask_depth_1",
             cfg.target_column,
         )
         if col in clean.columns
@@ -688,6 +725,9 @@ def run_orderbook_walk_forward(
                 symbol_column=cfg.symbol_column,
                 event_time_column=cfg.event_time_column,
                 min_signal_abs=cfg.min_signal_abs,
+                min_edge_over_cost=cfg.min_edge_over_cost,
+                max_relative_spread=cfg.max_relative_spread,
+                min_entry_depth=cfg.min_entry_depth,
                 fee_bps=cfg.fee_bps,
                 starting_equity=cfg.starting_equity,
             ),

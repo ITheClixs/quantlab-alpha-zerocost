@@ -99,6 +99,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--hist-gradient-max-iter", type=int, default=40)
     parser.add_argument("--fee-bps", type=float, default=1.0)
     parser.add_argument("--min-signal-abs-sweep", type=_parse_float_tuple, default=(0.0, 0.00002, 0.00005, 0.0001, 0.0002))
+    parser.add_argument("--min-edge-over-cost-sweep", type=_parse_float_tuple, default=(0.0, 0.00005, 0.0001, 0.0002))
+    parser.add_argument("--max-relative-spread", type=float, default=None)
+    parser.add_argument("--min-entry-depth", type=float, default=None)
     parser.add_argument("--starting-equity", type=float, default=100_000.0)
     parser.add_argument("--save-final-artifacts", action="store_true")
     return parser.parse_args()
@@ -113,9 +116,10 @@ def _best_score(row: dict[str, Any]) -> tuple[float, float, float]:
 
 
 def _best_backtest(backtests: list[dict[str, Any]]) -> dict[str, Any]:
-    if not backtests:
+    traded = [row for row in backtests if float(row.get("trade_count", 0.0)) > 0.0]
+    if not traded:
         return {}
-    return max(backtests, key=_best_score)
+    return max(traded, key=_best_score)
 
 
 def _prediction_summary(frame: pl.DataFrame) -> dict[str, Any]:
@@ -170,6 +174,9 @@ def _write_report(
         f"- Max folds: `{args.max_folds}`",
         f"- Fee: `{args.fee_bps}` bps per side",
         f"- Min signal abs sweep: `{args.min_signal_abs_sweep}`",
+        f"- Min edge over cost sweep: `{args.min_edge_over_cost_sweep}`",
+        f"- Max relative spread: `{args.max_relative_spread}`",
+        f"- Min entry depth: `{args.min_entry_depth}`",
         "",
         "## Data",
         "",
@@ -208,8 +215,8 @@ def _write_report(
         "",
         "## Costed Backtest Sweep",
         "",
-        "| model | min signal abs | trades | trade rate | hit rate | avg gross/trade | avg cost/trade | avg net/trade | total net | gross total |",
-        "|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|",
+        "| model | min signal abs | min edge > cost | candidates | filtered | trades | trade rate | hit rate | avg gross/trade | avg cost/trade | avg net/trade | total net | gross total |",
+        "|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|",
     ]
     for row in backtests:
         lines.append(
@@ -218,6 +225,9 @@ def _write_report(
                 [
                     f"`{row['model']}`",
                     _fmt(row["min_signal_abs"]),
+                    _fmt(row["min_edge_over_cost"]),
+                    _fmt(row.get("candidate_count", 0)),
+                    _fmt(row.get("filtered_count", 0)),
                     _fmt(row.get("trade_count", 0)),
                     _pct(row.get("trade_rate", 0.0)),
                     _pct(row.get("hit_rate", 0.0)),
@@ -235,7 +245,10 @@ def _write_report(
         lines += [
             f"- Model: `{best['model']}`",
             f"- Min signal abs: `{best['min_signal_abs']}`",
+            f"- Min edge over cost: `{best['min_edge_over_cost']}`",
             f"- Trades: `{_fmt(best.get('trade_count', 0))}`",
+            f"- Candidates: `{_fmt(best.get('candidate_count', 0))}`",
+            f"- Filtered: `{_fmt(best.get('filtered_count', 0))}`",
             f"- Total net return: `{_pct(best.get('total_return', 0.0))}`",
             f"- Gross total return: `{_pct(best.get('gross_total_return', 0.0))}`",
             f"- Hit rate: `{_pct(best.get('hit_rate', 0.0))}`",
@@ -243,6 +256,24 @@ def _write_report(
         ]
     else:
         lines.append("No costed backtest candidate was produced.")
+    traded_variants = sum(1 for row in backtests if float(row.get("trade_count", 0.0)) > 0.0)
+    candidate_variants = sum(1 for row in backtests if float(row.get("candidate_count", 0.0)) > 0.0)
+    max_candidates = max((int(row.get("candidate_count", 0)) for row in backtests), default=0)
+    max_trades = max((int(row.get("trade_count", 0)) for row in backtests), default=0)
+    lines += [
+        "",
+        "## Gate Diagnostic",
+        "",
+        f"- Backtest variants with raw candidates: `{candidate_variants}` / `{len(backtests)}`",
+        f"- Backtest variants with executed trades: `{traded_variants}` / `{len(backtests)}`",
+        f"- Max raw candidates in one variant: `{max_candidates:,}`",
+        f"- Max executed trades in one variant: `{max_trades:,}`",
+    ]
+    if traded_variants == 0 and candidate_variants > 0:
+        lines.append(
+            "- All raw candidates were filtered after applying predicted-edge-over-cost, spread, and depth gates. "
+            "This indicates directional predictability without enough predicted markout magnitude to pay aggressive execution costs."
+        )
     lines += [
         "",
         "## Limitations",
@@ -308,24 +339,33 @@ def main() -> int:
     backtests: list[dict[str, Any]] = []
     for model_name in ORDERBOOK_MODEL_NAMES:
         for min_signal_abs in args.min_signal_abs_sweep:
-            result = run_orderbook_signal_backtest(
-                wf.predictions,
-                config=OrderBookBacktestConfig(
-                    prediction_column=f"pred_{model_name}",
-                    target_column=args.target_column,
-                    min_signal_abs=float(min_signal_abs),
-                    fee_bps=args.fee_bps,
-                    starting_equity=args.starting_equity,
-                ),
-            )
-            row = {
-                "model": model_name,
-                "min_signal_abs": float(min_signal_abs),
-                **result.metrics,
-            }
-            backtests.append(row)
-            trades_path = output_root / f"{model_name}_threshold_{str(min_signal_abs).replace('.', 'p')}_trades.parquet"
-            result.trades.write_parquet(trades_path, compression="zstd")
+            for min_edge_over_cost in args.min_edge_over_cost_sweep:
+                result = run_orderbook_signal_backtest(
+                    wf.predictions,
+                    config=OrderBookBacktestConfig(
+                        prediction_column=f"pred_{model_name}",
+                        target_column=args.target_column,
+                        min_signal_abs=float(min_signal_abs),
+                        min_edge_over_cost=float(min_edge_over_cost),
+                        max_relative_spread=args.max_relative_spread,
+                        min_entry_depth=args.min_entry_depth,
+                        fee_bps=args.fee_bps,
+                        starting_equity=args.starting_equity,
+                    ),
+                )
+                row = {
+                    "model": model_name,
+                    "min_signal_abs": float(min_signal_abs),
+                    "min_edge_over_cost": float(min_edge_over_cost),
+                    "max_relative_spread": args.max_relative_spread,
+                    "min_entry_depth": args.min_entry_depth,
+                    **result.metrics,
+                }
+                backtests.append(row)
+                signal_slug = str(min_signal_abs).replace(".", "p")
+                edge_slug = str(min_edge_over_cost).replace(".", "p")
+                trades_path = output_root / f"{model_name}_signal_{signal_slug}_edge_{edge_slug}_trades.parquet"
+                result.trades.write_parquet(trades_path, compression="zstd")
 
     artifact_paths: dict[str, str] = {}
     if args.save_final_artifacts:
