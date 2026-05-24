@@ -74,7 +74,10 @@ renamed, or refactored. The JS inference path keeps its sha256 contract.
 Mandatory realism axes (full detail in §5):
 
 - Point-in-time S&P 500 membership.
-- Split + dividend total-return adjustment.
+- Split-adjusted tradable price series for execution and MTM, plus a
+  separately maintained dividend feed booked as cash PnL on ex-date
+  (no total-return double-count); total-return series reserved for
+  labels, diagnostic models, and benchmark analysis (§2.3, §5.4).
 - Next-day open as headline fill price using **tradable (not total-return)
   prices**, with HLC3-proxy VWAP and next-day close as sensitivity cases.
 - Per-name borrow cost proxy (3-tier static + date-aware upgrades), stress-
@@ -99,11 +102,11 @@ microstructure/HFT.
 A one-shot `scripts/pit_quality_audit.py` classifies the daily-bars dataset
 into exactly one of:
 
-| Label | Meaning | Promotion gate |
+| Label | Meaning | Promotion semantics |
 |---|---|---|
-| `pit_safe` | Date-symbol membership reconstructed; ticker mapping covers known transforms; delistings respected | Eligible for the full success gate (§6) |
-| `partial_pit_universe` | Some PIT info present (e.g., approximate constituent list, partial delist dates) but not byte-perfect | Conditional pass with explicit caveats in every report |
-| `survivorship_prototype_only` | PIT membership cannot be reconstructed | Gate **suspended**; results published as research-only; every artifact carries a prototype-only banner |
+| `pit_safe` | Date-symbol membership reconstructed; ticker mapping covers known transforms; delistings respected; delisting-return audit (§2.9) passes | **Full technical pass is possible.** Eligible for the full success gate (§6.4). May be described as institutional-grade in reports. |
+| `partial_pit_universe` | Some PIT info present (e.g., approximate constituent list, partial delist dates, partial delisting-return capture) but not byte-perfect | **Conditional research pass only, with explicit caveats in every report.** Must **not** be described as institutional-grade. |
+| `survivorship_prototype_only` | PIT membership cannot be reconstructed | **Success gate suspended.** Results are published as research-only; every artifact carries a prototype-only banner. |
 
 **Historical symbol coverage is not equivalent to PIT membership.** The
 classifier does not award `pit_safe` merely because delisted tickers appear
@@ -127,25 +130,40 @@ discovered during the audit.
 
 ### 2.3 Corporate actions and the three price series
 
-Three separate price series are stored and used for different purposes:
+Three separate price series are stored and used for distinct, non-overlapping
+purposes. v1 uses a strict **price-PnL + cash-dividend** accounting
+convention to eliminate the dividend double-counting risk that would arise
+from using total-return prices for MTM while also booking dividend cash:
 
 | Series | Source / construction | Used for |
 |---|---|---|
-| `tradable_*` | Raw or split-adjusted prices from the daily-bars source | **Execution fills**, fill-aligned PnL for newly opened/resized positions |
-| `split_adj_*` | Split-adjusted analytical prices | Feature engineering (returns, volatility, microstructure proxies) |
-| `total_return_*` | Split-adjusted + dividend-reinvested | Return-accounting labels (`y`, `y_vn`, `y_xs`), close-to-close MTM of held positions |
+| `tradable_*` | **Split-adjusted execution-consistent OHLCV** (split-adjusted in v1; raw lot/share accounting is deferred) | **Execution fills, fill-aligned PnL for newly opened/resized positions, and close-to-close MTM of held positions (price PnL only — dividends are booked separately)** |
+| `split_adj_*` | Split-adjusted analytical prices (may alias `tradable_*` when the source is already split-adjusted) | Feature engineering: returns, volatility, microstructure proxies, cross-sectional ranks |
+| `total_return_*` | Split-adjusted + dividend-reinvested | **Labels** (`y_raw`, `y_vn`, `y_xs`), diagnostic models, **benchmark analysis** (SPY total-return reference, capacity benchmarking) — **not** the MTM series for the portfolio |
 
-Dividends from a separate feed are applied to the total-return series and
-are **also** booked as a separate cash-PnL line item on ex-date in the
-backtest. The dividend feed source is recorded with a quality label; if
-yfinance is used, the source is labelled
-`public_snapshot_not_vendor_pit` — never `pit`.
+**Why `tradable_*` is split-adjusted in v1 rather than raw:** raw prices
+across splits would require explicit lot/share accounting (a 2-for-1 split
+must double the share count on the holding's effective record). v1 does
+not implement raw lot/share accounting, so the safer convention is
+split-adjusted execution-consistent prices. Raw lot/share accounting is
+deferred to a Phase-2 backtest upgrade.
 
-If the upstream HF dataset is already total-return adjusted, that fact is
-recorded in the manifest as `corporate_action_quality: vendor_total_return`,
-and the `tradable_*` series is reconstructed by removing dividend
-reinvestment (subtract the dividend ladder back out) so execution does not
-silently use total-return prices.
+**Dividend accounting (single source of truth):**
+- Dividends are sourced from a separate dividend feed (HF, vendor, or
+  yfinance snapshot) and stored in `sp500_dividends.parquet`.
+- The dividend feed source quality is recorded in the manifest; if
+  yfinance is used, the source is labelled
+  `public_snapshot_not_vendor_pit` — never `pit`.
+- Dividends are booked **once**, as cash PnL on the ex-date, to the
+  holder of record at the prior close. They are **not** also reflected
+  via the `total_return_*` series in the portfolio's PnL path.
+
+**If the upstream HF dataset is already total-return adjusted,** that
+fact is recorded in the manifest as
+`corporate_action_quality: vendor_total_return`, and the `tradable_*`
+series is reconstructed by **removing dividend reinvestment** (subtract
+the dividend ladder back out) so execution and MTM never silently use
+total-return prices.
 
 ### 2.4 Borrow proxy (shorts only)
 
@@ -178,10 +196,11 @@ with **3 %** as a sensitivity case. (Share-volume ADV is **not** used.)
 data/processed/equities/
   sp500_pit_membership.parquet           # (date, symbol, in_index, add/remove dates, reason) — or absent if prototype-only
   ticker_mapping.parquet                  # historical ticker transforms (FB↔META, etc.)
-  sp500_tradable_prices.parquet           # OHLCV, raw or split-adjusted, for execution
-  sp500_split_adjusted_prices.parquet     # for feature engineering
-  sp500_total_return_prices.parquet       # for return accounting + MTM
+  sp500_tradable_prices.parquet           # OHLCV, split-adjusted execution-consistent (§2.3)
+  sp500_split_adjusted_prices.parquet     # for feature engineering (may alias tradable_*)
+  sp500_total_return_prices.parquet       # for labels, diagnostics, benchmark analysis (not MTM)
   sp500_dividends.parquet                 # ex-date, amount, source-quality label
+  sp500_delisting_audit.parquet           # exit classification per §2.9
   sp500_adv.parquet                       # adv_20d_dollar_lag1 per (date, symbol)
   sp500_borrow_proxy.parquet              # static (symbol, borrow_tier, annual_bps)
   _manifest.json                          # see §2.7
@@ -201,6 +220,10 @@ data/processed/equities/
 - `borrow_source_quality` (always `static_proxy_v1` initially)
 - `pit_membership_source` (one of: `hf:andyqin18/sp500-historical-membership`,
   `kaggle:...`, `wikipedia_fallback`, `absent_prototype_only`)
+- `delisting_audit_quality` (one of: `captured_above_threshold`,
+  `partial_capture`, `audit_absent`); audit summary counters
+  (`delisted_captured`, `delisted_missing`, `merger_captured`,
+  `merger_missing`, `ticker_changed`, `unknown_exit`)
 - `build_command_line`, `python_version`, `package_versions` (subset of
   pinned deps relevant to data engineering)
 - `warnings` — list of strings (e.g. "fallback dividend source",
@@ -212,6 +235,45 @@ Every training and backtest entry point reads `_manifest.json` first and
 **hard-fails** if any required hash, schema fingerprint, row count, or
 date range disagrees with what is recorded. The same model `run_id` is
 only valid for the manifest hash it was trained against.
+
+### 2.9 Delisting-return audit (mandatory)
+
+PIT membership alone is not sufficient. A symbol may leave the dataset
+for several reasons, each with different return implications:
+
+- **Delisting** (going to zero, bankruptcy, regulatory delisting) — the
+  terminal return is typically a large negative loss.
+- **Acquisition / merger** — the terminal return is the cash + stock
+  consideration relative to the prior close.
+- **Ticker change** (e.g., FB → META) — no terminal return; the position
+  rolls forward to the new ticker.
+- **Voluntary deregistration / going private** — usually a deal price.
+- **Missing terminal price** without explanation — return-unknown.
+
+For every symbol that exits the dataset between its first and last
+observation in the development or holdout window, `pit_quality_audit.py`
+classifies the exit into one of: `delisted_captured`, `delisted_missing`,
+`merger_acquired_captured`, `merger_acquired_missing`, `ticker_changed`,
+`unknown_exit`. The audit produces `sp500_delisting_audit.parquet` with
+columns `(symbol, exit_date, exit_reason, terminal_return_captured,
+terminal_return_value, classification_source)`.
+
+**Promotion semantics interaction:**
+- `pit_safe` requires that at least 95 % of exits in the development +
+  holdout windows are classified as `*_captured` or `ticker_changed`,
+  and zero `unknown_exit` rows inside the holdout window.
+- `partial_pit_universe` is awarded if PIT membership is otherwise
+  reconstructable but the delisting-return audit does not meet the
+  thresholds above; the report must include a "delisting-return
+  limitation" section quantifying the unmeasured loss.
+- `survivorship_prototype_only` is awarded if the audit cannot run at
+  all (e.g., no exit-reason source available).
+
+**Why this matters:** missing delisting losses systematically inflate
+equity strategy backtests, often by 1-3 % annualized for a long-only
+S&P 500 strategy and more for long/short books that may have been long
+the delisted names. The audit is the difference between a believable
+backtest and a misleading one.
 
 ---
 
@@ -288,15 +350,29 @@ Target final feature count: ~70-90 after pruning.
 
 6. **Market / regime context** (single-value features broadcast across
    names on date `t`): `spy_log_return_5`, `spy_realized_vol_20`,
-   `vix_close` if available else `cross_sectional_vol_20` as a VIX proxy,
-   `cross_sectional_dispersion = std(log_return_1) across the date-t
-   universe`.
+   `vix_close`, `cross_sectional_dispersion = std(log_return_1) across
+   the date-t universe`.
+
+   **VIX fallback rule (mandatory):** `vix_close` is used **only** for
+   dates where a valid historical value exists in the source feed (VIX
+   trading began 1990-01-02; pre-1990 dates have no VIX). For dates
+   without a valid VIX value, the feature falls back to
+   `cross_sectional_vol_20`, a cross-sectional volatility proxy. The
+   absence of VIX **must not** silently truncate the training period
+   or restrict the universe, because doing so creates hidden selection
+   bias (early decades would be dropped). The feature builder emits a
+   single boolean column `vix_is_proxy` recording, per date, whether
+   the value came from VIX or the proxy.
 
 7. **Foundation-model meta-features**: **disabled by default in v1**
-   behind `enable_meta_features: false`. Enabled only after a four-step
-   audit: timestamp audit, ablation study, baseline comparison, and
-   confirmed improvement on **both** validation and (later) holdout — not
-   holdout alone.
+   behind `enable_meta_features: false`. The decision to enable or
+   disable meta-features for a given run is made **using development-
+   window validation only** (after timestamp audit, ablation study, and
+   baseline comparison). Holdout performance **must not** be used to
+   decide whether to enable or disable meta-features for the same run.
+   Holdout improvement may be **reported** after the one-shot holdout
+   evaluation but it informs only future runs, not the current
+   `enable_meta_features` choice.
 
 8. **Sector / industry**: stored if available (GICS L1 + L2) and used
    for diagnostics, reporting, and Phase-2 sector-neutral residualization.
@@ -346,6 +422,14 @@ date set is written to `experiments/alpha_eq/<run_id>/holdout_dates.json`
 and the data loaders refuse to return any row in that set unless the
 caller is `inference.evaluate_holdout()` and the run has not yet emitted
 `holdout_metrics.json`.
+
+**Minimum holdout length:** the permanent holdout, after PIT and
+tradability filters, must contain at least **3 years (≥ 756 trading
+days)** of daily observations. If the filtered holdout is shorter, the
+M6 success gate **cannot pass** regardless of metric values, because
+holdout Sharpe over a sub-3-year window is too unstable to support a
+promotion decision. This is enforced by
+`tests/alpha_eq/test_holdout_min_length.py` and rechecked at M6.
 
 ---
 
@@ -512,14 +596,20 @@ below would break the simpler API used by JS benchmark scripts.
 ```
 date t (close):        signal generated using features available through close_t
 date t+1 (execution):  fill at next-day OPEN (headline) using tradable prices
-date t+1 (close):      MTM at total_return_close_{t+1} for existing positions
+date t+1 (close):      MTM at tradable_close_{t+1} (split-adjusted, price-only)
+                       + any ex-date dividend booked as separate cash PnL
 date t+2 ... :         hold until next rebalance
 ```
 
 Hard invariant: `feature_as_of_date < execution_date` (asserted per row).
-Execution reads only the **tradable** price series; close-to-close MTM
-of held positions reads the **total-return** price series; dividends
-are booked as a separate cash-PnL line item on ex-date.
+
+**Single accounting convention (no double counting):**
+- Execution and price-MTM use the `tradable_*` series (split-adjusted,
+  execution-consistent — §2.3).
+- Dividends are booked **once**, as cash PnL on ex-date, to the holder
+  of record at the prior close.
+- The `total_return_*` series is **not** read by the portfolio MTM path;
+  it is reserved for labels, diagnostic models, and benchmark analysis.
 
 ### 5.3 Fill model
 
@@ -530,15 +620,26 @@ are booked as a separate cash-PnL line item on ex-date.
 - **Sensitivity case B (close):** `fill_price_{t+1} = close_tradable_{t+1}`.
 - No partial fills, no rejection (documented limitation).
 
-### 5.4 Fill-aligned PnL accounting
+### 5.4 Fill-aligned PnL accounting (price PnL + cash dividends)
 
-- **Newly opened or resized positions:** PnL starts from the actual
-  fill price, **not** from `close_t`. A position opened at `fill_{t+1}`
-  has zero `close_t → fill_{t+1}` PnL by construction.
+The v1 convention is **price-PnL on `tradable_*` plus explicit cash
+dividend PnL**, eliminating any total-return double-count.
+
+- **Newly opened or resized positions:** price PnL starts from the
+  **actual fill price**, not from `close_t`. A position opened at
+  `fill_{t+1}` has zero `close_t → fill_{t+1}` PnL by construction.
+  First-day PnL on the new lot is
+  `(tradable_close_{t+1} − fill_{t+1}) × signed_shares`.
 - **Existing held positions:** marked close-to-close using
-  `total_return_close`.
-- **Dividends:** accrued on ex-date as a separate cash-PnL row;
-  not folded silently into execution prices.
+  `tradable_close` (split-adjusted, price-only).
+- **Dividends:** booked once, as a separate cash-PnL line item on
+  ex-date, to the holder of record at the prior close.
+  Cash dividend PnL = `signed_shares × dividend_per_share`. Long
+  positions receive the cash; short positions are debited the cash
+  (the canonical short-seller-pays-the-dividend convention).
+- **Total-return prices are never used for portfolio MTM.** They are
+  used only for labels, diagnostic models, and benchmark analysis
+  (e.g., SPY total-return reference).
 
 ### 5.5 Portfolio construction (single mode v1)
 
@@ -607,20 +708,31 @@ are booked as a separate cash-PnL line item on ex-date.
 
 ### 5.11 PnL decomposition (mandatory)
 
-Every report shows:
+Every report shows the v1 accounting identity:
 
 ```
-gross_alpha
-  − commission_drag
-  − spread_drag
-  − borrow_drag
-  − financing_drag
-  = net_alpha
+portfolio_pnl  =  price_pnl_split_adjusted
+                + cash_dividend_pnl
+                − commission_drag
+                − spread_drag
+                − borrow_drag
+                − financing_drag
 ```
 
-All five drags are reported as both bps/day and annualized %. The
-invariant `gross_alpha − sum_of_drags ≈ net_alpha` (within float
-tolerance) is asserted by `tests/alpha_eq/test_pnl_decomposition.py`.
+`gross_alpha = price_pnl_split_adjusted + cash_dividend_pnl` and
+`net_alpha = portfolio_pnl` are reported separately, alongside every
+drag, in both bps/day and annualized %. The invariant
+`gross_alpha − (commission_drag + spread_drag + borrow_drag +
+financing_drag) ≈ net_alpha` (within float tolerance) is asserted by
+`tests/alpha_eq/test_pnl_decomposition.py`.
+
+Cross-check: per-day `cash_dividend_pnl` summed by ex-date equals the
+ex-date dividends in `sp500_dividends.parquet` joined to the day's
+positions. The test `test_no_dividend_double_count.py` (added to the CI
+matrix in §6.2) asserts that the portfolio MTM series does **not**
+also embed the dividend signal — i.e., regressing cash_dividend_pnl on
+the residual of price_pnl_split_adjusted vs. total_return_pnl is
+statistically zero.
 
 ### 5.12 Mandatory exposure diagnostics
 
@@ -795,7 +907,11 @@ experiments/
 | `test_pre_decimalization_spread.py` | Pre-2001-04-09 spread widening applied |
 | `test_min_bucket.py` | Full universe ≥ 10/10; focused basket ≥ 5/5; insufficient → skip, never silently empty |
 | `test_exposure_diagnostics.py` | All exposure series present; daily net ≈ 0 ± 1 %; gross within target ± 5 % |
-| `test_pnl_decomposition.py` | gross − cost − spread − borrow − financing ≈ net within tolerance |
+| `test_pnl_decomposition.py` | `gross_alpha − (commission + spread + borrow + financing) ≈ net_alpha` within tolerance |
+| `test_no_dividend_double_count.py` | Portfolio MTM uses `tradable_*`, not `total_return_*`; cash dividends booked once on ex-date; regression test against double-count residual is statistically zero |
+| `test_delisting_audit.py` | Exits classified per §2.9; `pit_safe` requires ≥ 95 % captured + zero `unknown_exit` in holdout; otherwise downgraded |
+| `test_vix_fallback.py` | Pre-1990 dates use `cross_sectional_vol_20`; no silent truncation of training period; `vix_is_proxy` boolean correct per date |
+| `test_holdout_min_length.py` | Filtered permanent holdout contains ≥ 3 years of daily observations after PIT + tradability filters; otherwise M6 cannot pass |
 | `test_reproducibility.py` | Splits/configs/feature_cols/manifests byte-identical; predictions/metrics within tolerance |
 | `test_seeds.py` | All RNGs seeded; metadata records seeds |
 | `test_random_signal_sanity.py` | Random predictions → no stable positive Sharpe, no beat SPY, rank IC ≈ 0 |
@@ -824,34 +940,47 @@ and the M6 success gate is suspended.
 
 S1-EQ is promoted iff **all** of the following hold:
 
-1. `data_quality_label == pit_safe` (or `partial_pit_universe` with
-   explicit caveats; `survivorship_prototype_only` → gate suspended).
-2. S1-EQ headline (`q = 0.10`, gross = 1.0, fill = next-day open,
-   borrow ×1.0) **net annualized Sharpe ≥ 0.7**.
-3. **Two-branch baseline rule:**
+1. `data_quality_label == pit_safe` (full technical pass possible).
+   `partial_pit_universe` is a **conditional research pass only** with
+   explicit caveats and the "not institutional-grade" label in the
+   report; `survivorship_prototype_only` → gate suspended.
+2. **Permanent holdout length ≥ 3 years (≥ 756 trading days)** after
+   PIT + tradability filters (§3.6).
+3. **Delisting-return audit passes** per §2.9 thresholds: ≥ 95 %
+   captured-or-ticker-changed in dev+holdout, zero `unknown_exit` in
+   holdout.
+4. S1-EQ headline (`q = 0.10`, gross = 1.0, fill = next-day open,
+   borrow ×1.0) **net annualized Sharpe ≥ 0.7** — this is a
+   **standalone requirement** that must be satisfied regardless of
+   how SPY or Family B perform on the holdout (beating a negative
+   SPY Sharpe or a negative Family B Sharpe on its own is never
+   sufficient).
+5. **Two-branch baseline rule:**
    - If Family B net Sharpe > 0:
      S1-EQ net Sharpe ≥ **1.5 × Family B net Sharpe**.
    - If Family B net Sharpe ≤ 0:
      S1-EQ net Sharpe ≥ **0.7** AND
      `S1-EQ net Sharpe − Family B net Sharpe ≥ 0.5`.
-4. S1-EQ net Sharpe **>** SPY buy-and-hold Sharpe over the same holdout
-   window.
-5. **Max drawdown ≥ −25 %** (i.e., not worse than −25 %).
-6. **Borrow stress:** at borrow ×2.0 net Sharpe still positive; at
+6. S1-EQ net Sharpe **>** SPY buy-and-hold Sharpe over the same holdout
+   window. **If SPY Sharpe is negative, criterion (4) — standalone
+   Sharpe ≥ 0.7 — is the binding requirement;** the comparison to a
+   negative SPY Sharpe is reported but does not lower the bar.
+7. **Max drawdown ≥ −25 %** (i.e., not worse than −25 %).
+8. **Borrow stress:** at borrow ×2.0 net Sharpe still positive; at
    borrow ×3.0 net total return still positive (annualized).
-7. **JS-overlay does NOT beat S1-EQ** on net Sharpe — confirms retraining
+9. **JS-overlay does NOT beat S1-EQ** on net Sharpe — confirms retraining
    helped.
-8. **Rolling-window CV diagnostic** shows S1-EQ alpha is not regime-
-   concentrated to a single 2-year window.
-9. **Concentration check (all three required):**
-   - No single stock contributes > 25 % of total net PnL.
-   - No single calendar month contributes > 35 % of total net PnL.
-   - No single sector contributes > 50 % of total net PnL **unless
-     explicitly flagged and justified** in the report.
-10. All mandatory CI tests (§6.2) green.
-11. All artifacts present per §4.11 and §5.17; all hashes verify.
+10. **Rolling-window CV diagnostic** shows S1-EQ alpha is not regime-
+    concentrated to a single 2-year window.
+11. **Concentration check (all three required):**
+    - No single stock contributes > 25 % of total net PnL.
+    - No single calendar month contributes > 35 % of total net PnL.
+    - No single sector contributes > 50 % of total net PnL **unless
+      explicitly flagged and justified** in the report.
+12. All mandatory CI tests (§6.2) green.
+13. All artifacts present per §4.11 and §5.17; all hashes verify.
 
-If any of (2)-(9) fail, S1-EQ is **not promoted**.
+If any of (2)-(11) fail, S1-EQ is **not promoted**.
 
 ### 6.5 Negative-result handling (mandatory)
 
