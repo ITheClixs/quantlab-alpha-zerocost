@@ -169,6 +169,13 @@ def _safe_corr(values: np.ndarray, predictions: np.ndarray) -> float:
     return out if isfinite(out) else 0.0
 
 
+def _directional_accuracy(predictions: np.ndarray, values: np.ndarray) -> float:
+    mask = (predictions != 0.0) & (values != 0.0)
+    if not np.any(mask):
+        return 0.0
+    return float(np.mean(np.sign(predictions[mask]) == np.sign(values[mask])))
+
+
 def _prediction_metrics(frame: pl.DataFrame, *, prediction_column: str, target_column: str) -> dict[str, Any]:
     if frame.is_empty() or prediction_column not in frame.columns or target_column not in frame.columns:
         return {"rows": 0, "ic": 0.0, "zero_mean_r2": 0.0, "directional_accuracy": 0.0}
@@ -186,7 +193,7 @@ def _prediction_metrics(frame: pl.DataFrame, *, prediction_column: str, target_c
         "rows": clean.height,
         "ic": _safe_corr(preds, target),
         "zero_mean_r2": _zero_mean_r2(target, preds),
-        "directional_accuracy": float(np.mean((preds > 0.0) == (target > 0.0))),
+        "directional_accuracy": _directional_accuracy(preds, target),
     }
 
 

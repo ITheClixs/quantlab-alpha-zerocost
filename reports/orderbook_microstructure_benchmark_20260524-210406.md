@@ -1,4 +1,4 @@
-# Order-Book Microstructure Benchmark `20260524-210406`
+# Order-Book Microstructure Benchmark `20260524-210832`
 
 ## Scope
 
@@ -6,7 +6,7 @@ This run trains order-book signal heads on local Binance futures L2 depth snapsh
 
 ## Configuration
 
-- Git SHA: `043e41f8a0ea4dd601bbde4a991078f7baeeb473`
+- Git SHA: `6f27baed474e15736db5dc8b946f5fcf94d3a370`
 - Raw root: `data/raw/huggingface/predict-quant__binance-future-orderbook`
 - Symbols: `BTCUSDT`
 - Max files per symbol: `33`
@@ -45,9 +45,9 @@ This run trains order-book signal heads on local Binance futures L2 depth snapsh
 
 | model | rows | directional acc. | zero-mean R2 | IC |
 |---|---:|---:|---:|---:|
-| `ridge` | 179,835 | 58.051% | 0.0398955 | 0.222115 |
-| `hist_gradient` | 179,835 | 43.568% | 0.0505826 | 0.235812 |
-| `ensemble_mean` | 179,835 | 56.684% | 0.0593607 | 0.244637 |
+| `ridge` | 179,835 | 80.117% | 0.0398955 | 0.222115 |
+| `hist_gradient` | 179,835 | 78.926% | 0.0505826 | 0.235812 |
+| `ensemble_mean` | 179,835 | 80.086% | 0.0593607 | 0.244637 |
 
 ## Costed Backtest Sweep
 
@@ -243,10 +243,10 @@ This sweep trades only when `abs(prediction) > k * estimated_round_trip_cost`.
 
 ## Trading Conversion Debug
 
-- Best-trade audit parquet: `experiments/orderbook_microstructure/20260524-210406/best_trade_pnl_audit.parquet`
-- Best-trade audit CSV: `experiments/orderbook_microstructure/20260524-210406/best_trade_pnl_audit.csv`
-- All-row prediction metrics: `{'rows': 179835, 'ic': 0.22211506419921925, 'zero_mean_r2': 0.03989546523914178, 'directional_accuracy': 0.5805099118636527}`
-- Traded-row prediction metrics: `{'rows': 169, 'ic': 0.33908933952571635, 'zero_mean_r2': -243.63699671701755, 'directional_accuracy': 0.9230769230769231}`
+- Best-trade audit parquet: `experiments/orderbook_microstructure/20260524-210832/best_trade_pnl_audit.parquet`
+- Best-trade audit CSV: `experiments/orderbook_microstructure/20260524-210832/best_trade_pnl_audit.csv`
+- All-row prediction metrics: `{'rows': 179835, 'ic': 0.22211506419921925, 'zero_mean_r2': 0.03989546523914178, 'directional_accuracy': 0.8011693137974294}`
+- Traded-row prediction metrics: `{'rows': 169, 'ic': 0.33908933952571635, 'zero_mean_r2': -243.63699671701755, 'directional_accuracy': 0.2857142857142857}`
 
 ### Cost Regimes
 
@@ -317,11 +317,11 @@ The second table reruns the backtest under each cost regime, so the trade set ma
 
 | horizon | best model | k | IC | zero-mean R2 | directional acc. | trades | gross hit | net hit | avg gross/trade | avg net/trade | turnover | net PnL | gross PnL |
 |---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| 5 | `ridge` | 1 | 0.222115 | 0.0398955 | 58.051% | 169 | 2.367% | 0.000% | 0.000% | -0.020% | 0.094% | -3.335% | 0.013% |
-| 10 | `ridge` | 1 | 0.231101 | 0.0506765 | 59.466% | 164 | 0.610% | 0.000% | -0.001% | -0.021% | 0.091% | -3.386% | -0.140% |
-| 20 | `ridge` | 1.5 | 0.209921 | 0.041812 | 60.345% | 157 | 0.000% | 0.000% | -0.001% | -0.022% | 0.088% | -3.334% | -0.227% |
-| 50 | `ridge` | 1 | 0.17579 | 0.0300175 | 58.917% | 259 | 8.108% | 8.108% | 0.002% | -0.018% | 0.145% | -4.594% | 0.517% |
-| 100 | `ridge` | 1 | 0.101693 | 0.00576291 | 56.058% | 436 | 48.853% | 9.404% | -0.008% | -0.028% | 0.247% | -11.546% | -3.419% |
+| 5 | `ridge` | 1 | 0.222115 | 0.0398955 | 80.117% | 169 | 2.367% | 0.000% | 0.000% | -0.020% | 0.094% | -3.335% | 0.013% |
+| 10 | `ridge` | 1 | 0.231101 | 0.0506765 | 75.200% | 164 | 0.610% | 0.000% | -0.001% | -0.021% | 0.091% | -3.386% | -0.140% |
+| 20 | `ridge` | 1.5 | 0.209921 | 0.041812 | 69.909% | 157 | 0.000% | 0.000% | -0.001% | -0.022% | 0.088% | -3.334% | -0.227% |
+| 50 | `ridge` | 1 | 0.17579 | 0.0300175 | 63.251% | 259 | 8.108% | 8.108% | 0.002% | -0.018% | 0.145% | -4.594% | 0.517% |
+| 100 | `ridge` | 1 | 0.101693 | 0.00576291 | 58.640% | 436 | 48.853% | 9.404% | -0.008% | -0.028% | 0.247% | -11.546% | -3.419% |
 
 ## Gate Diagnostic
 

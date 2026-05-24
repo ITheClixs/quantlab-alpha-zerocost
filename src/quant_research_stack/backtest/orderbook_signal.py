@@ -296,6 +296,13 @@ def _safe_corr(a: NDArray[np.float64], b: NDArray[np.float64]) -> float:
     return 0.0 if math.isnan(value) else value
 
 
+def _directional_accuracy(y_pred: NDArray[np.float64], y_true: NDArray[np.float64]) -> float:
+    mask = (y_pred != 0.0) & (y_true != 0.0)
+    if not np.any(mask):
+        return 0.0
+    return float(np.mean(np.sign(y_pred[mask]) == np.sign(y_true[mask])))
+
+
 def _sharpe_ratio(returns: NDArray[np.float64], *, annualization: float) -> float:
     if returns.size < 2:
         return 0.0
@@ -499,7 +506,7 @@ def run_orderbook_signal_backtest(
 
     y_pred = clean[cfg.prediction_column].to_numpy().astype(np.float64)
     y_true = clean[cfg.target_column].to_numpy().astype(np.float64)
-    direction_acc = float(np.mean((y_pred > 0.0) == (y_true > 0.0)))
+    direction_acc = _directional_accuracy(y_pred, y_true)
     fee_return = 2.0 * cfg.fee_bps * 1e-4
     slippage_return = 2.0 * cfg.slippage_bps * 1e-4
     horizon = _target_horizon(cfg.target_column)
@@ -901,7 +908,7 @@ def _evaluate_prediction_metrics(
     y_true = clean[target_column].to_numpy().astype(np.float64)
     return {
         "rows": clean.height,
-        "directional_accuracy": float(np.mean((y_pred > 0.0) == (y_true > 0.0))),
+        "directional_accuracy": _directional_accuracy(y_pred, y_true),
         "zero_mean_r2": _zero_mean_r2(y_true, y_pred),
         "information_coefficient": _safe_corr(y_pred, y_true),
     }

@@ -171,6 +171,30 @@ def test_orderbook_backtest_emits_price_audit_and_gross_net_hit_rates() -> None:
     assert result.trades["prediction_direction_correct"].to_list() == [True, True, True]
 
 
+def test_orderbook_directional_accuracy_excludes_zero_return_ties() -> None:
+    frame = pl.DataFrame(
+        {
+            "symbol": ["BTCUSDT", "BTCUSDT"],
+            "event_time": [1, 2],
+            "prediction": [-0.01, 0.01],
+            "future_mid_return_1": [0.0, -0.01],
+            "relative_spread": [0.0, 0.0],
+        }
+    )
+
+    result = run_orderbook_signal_backtest(
+        frame,
+        config=OrderBookBacktestConfig(
+            prediction_column="prediction",
+            target_column="future_mid_return_1",
+            spread_cost_multiplier=0.0,
+            fee_bps=0.0,
+        ),
+    )
+
+    assert result.metrics["directional_accuracy"] == 0.0
+
+
 def test_orderbook_backtest_supports_cost_regimes_and_inverted_signals() -> None:
     frame = pl.DataFrame(
         {
