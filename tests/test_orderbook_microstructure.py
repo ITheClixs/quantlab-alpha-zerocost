@@ -51,6 +51,35 @@ def test_orderbook_features_from_frame_builds_targets_and_depth_features() -> No
     assert features["future_mid_return_1"].head(2).round(6).to_list() == [0.01, 0.009901]
 
 
+def test_orderbook_features_include_future_execution_audit_prices() -> None:
+    raw = pl.DataFrame(
+        {
+            "E": [1_000, 2_000],
+            "T": [900, 1_900],
+            "u": [10, 11],
+            "bids": [
+                '[["99.0", "4.0"]]',
+                '[["101.0", "2.0"]]',
+            ],
+            "asks": [
+                '[["101.0", "2.0"]]',
+                '[["103.0", "2.0"]]',
+            ],
+        }
+    )
+
+    features = orderbook_features_from_frame(
+        raw,
+        dataset_id="unit",
+        source_file="unit.parquet",
+        symbol="BTCUSDT",
+        horizons=(1,),
+        depth_levels=(1,),
+    )
+
+    assert features.select(["future_mid_price_1", "future_best_bid_1", "future_best_ask_1"]).row(0) == (102.0, 101.0, 103.0)
+
+
 def test_orderbook_backtest_charges_spread_and_round_trip_fees() -> None:
     frame = pl.DataFrame(
         {
@@ -79,6 +108,147 @@ def test_orderbook_backtest_charges_spread_and_round_trip_fees() -> None:
     assert result.metrics["avg_trade_cost_return"] == pytest.approx(0.00145)
     assert result.trades["net_return"].round(6).to_list() == [0.0048, 0.0013]
     assert result.metrics["total_return"] > 0.006
+
+
+def test_orderbook_backtest_emits_price_audit_and_gross_net_hit_rates() -> None:
+    frame = pl.DataFrame(
+        {
+            "symbol": ["BTCUSDT", "BTCUSDT", "BTCUSDT"],
+            "event_time": [1_767_225_600_000, 1_767_312_000_000, 1_767_398_400_000],
+            "prediction": [0.03, -0.04, 0.02],
+            "future_mid_return_1": [0.03, -0.04, 0.005],
+            "mid_price": [100.0, 100.0, 100.0],
+            "best_bid": [99.0, 99.5, 99.5],
+            "best_ask": [101.0, 100.5, 100.5],
+            "future_mid_price_1": [103.0, 96.0, 100.5],
+            "future_best_bid_1": [102.5, 95.5, 100.0],
+            "future_best_ask_1": [103.5, 96.5, 101.0],
+            "relative_spread": [0.02, 0.01, 0.01],
+        }
+    )
+
+    result = run_orderbook_signal_backtest(
+        frame,
+        config=OrderBookBacktestConfig(
+            prediction_column="prediction",
+            target_column="future_mid_return_1",
+            fee_bps=0.0,
+        ),
+    )
+
+    assert result.metrics["trade_count"] == 3
+    assert result.metrics["gross_hit_rate"] == 1.0
+    assert result.metrics["net_hit_rate"] == pytest.approx(2.0 / 3.0)
+    assert result.metrics["hit_rate"] == result.metrics["net_hit_rate"]
+    assert result.metrics["long_trade_count"] == 2
+    assert result.metrics["short_trade_count"] == 1
+    assert set(result.trades.columns) >= {
+        "timestamp",
+        "side",
+        "predicted_return",
+        "entry_mid",
+        "entry_bid",
+        "entry_ask",
+        "exit_mid",
+        "exit_bid",
+        "exit_ask",
+        "realized_mid_return",
+        "gross_return",
+        "spread_cost_return",
+        "fee_cost_return",
+        "slippage_cost_return",
+        "estimated_round_trip_cost",
+        "edge_to_cost_ratio",
+        "net_return",
+        "holding_horizon",
+        "prediction_direction_correct",
+        "gross_hit",
+        "net_hit",
+    }
+    assert result.trades["side"].to_list() == ["long", "short", "long"]
+    assert result.trades["spread_cost_return"].round(6).to_list() == [0.015, 0.01, 0.01]
+    assert result.trades["net_return"].round(6).to_list() == [0.015, 0.03, -0.005]
+    assert result.trades["prediction_direction_correct"].to_list() == [True, True, True]
+
+
+def test_orderbook_backtest_supports_cost_regimes_and_inverted_signals() -> None:
+    frame = pl.DataFrame(
+        {
+            "symbol": ["BTCUSDT", "BTCUSDT"],
+            "event_time": [1, 2],
+            "prediction": [0.03, 0.03],
+            "future_mid_return_1": [0.02, 0.02],
+            "mid_price": [100.0, 100.0],
+            "best_bid": [99.5, 99.5],
+            "best_ask": [100.5, 100.5],
+            "future_mid_price_1": [102.0, 102.0],
+            "future_best_bid_1": [101.5, 101.5],
+            "future_best_ask_1": [102.5, 102.5],
+            "relative_spread": [0.01, 0.01],
+        }
+    )
+
+    no_cost = run_orderbook_signal_backtest(
+        frame,
+        config=OrderBookBacktestConfig(
+            prediction_column="prediction",
+            target_column="future_mid_return_1",
+            spread_cost_multiplier=0.0,
+            fee_bps=0.0,
+        ),
+    )
+    fee_only = run_orderbook_signal_backtest(
+        frame,
+        config=OrderBookBacktestConfig(
+            prediction_column="prediction",
+            target_column="future_mid_return_1",
+            spread_cost_multiplier=0.0,
+            fee_bps=1.0,
+        ),
+    )
+    inverted = run_orderbook_signal_backtest(
+        frame,
+        config=OrderBookBacktestConfig(
+            prediction_column="prediction",
+            target_column="future_mid_return_1",
+            spread_cost_multiplier=0.0,
+            fee_bps=0.0,
+            invert_signal=True,
+        ),
+    )
+
+    assert no_cost.trades["net_return"].to_list() == pytest.approx([0.02, 0.02])
+    assert fee_only.trades["fee_cost_return"].to_list() == pytest.approx([0.0002, 0.0002])
+    assert fee_only.trades["net_return"].to_list() == pytest.approx([0.0198, 0.0198])
+    assert inverted.trades["side"].to_list() == ["short", "short"]
+    assert inverted.metrics["gross_hit_rate"] == 0.0
+    assert inverted.metrics["total_return"] < 0.0
+
+
+def test_orderbook_backtest_filters_by_edge_to_cost_ratio() -> None:
+    frame = pl.DataFrame(
+        {
+            "symbol": ["BTCUSDT", "BTCUSDT"],
+            "event_time": [1, 2],
+            "prediction": [0.03, 0.015],
+            "future_mid_return_1": [0.04, 0.04],
+            "relative_spread": [0.01, 0.01],
+        }
+    )
+
+    result = run_orderbook_signal_backtest(
+        frame,
+        config=OrderBookBacktestConfig(
+            prediction_column="prediction",
+            target_column="future_mid_return_1",
+            fee_bps=0.0,
+            min_edge_to_cost_ratio=2.0,
+        ),
+    )
+
+    assert result.metrics["trade_count"] == 1
+    assert result.trades["prediction"].to_list() == [0.03]
+    assert result.trades["edge_to_cost_ratio"].to_list() == pytest.approx([3.0])
 
 
 def test_orderbook_backtest_reports_trade_and_daily_sharpe() -> None:

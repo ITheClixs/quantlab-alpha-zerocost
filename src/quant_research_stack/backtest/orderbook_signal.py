@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import math
+import re
 from collections import defaultdict
 from collections.abc import Iterable
 from dataclasses import dataclass
@@ -41,11 +42,15 @@ class OrderBookBacktestConfig:
     relative_spread_column: str = "relative_spread"
     min_signal_abs: float = 0.0
     min_edge_over_cost: float = 0.0
+    min_edge_to_cost_ratio: float | None = None
     max_relative_spread: float | None = None
     min_entry_depth: float | None = None
+    spread_cost_multiplier: float = 1.0
     fee_bps: float = 1.0
+    slippage_bps: float = 0.0
     starting_equity: float = 100_000.0
     max_trades: int | None = None
+    invert_signal: bool = False
 
 
 @dataclass(frozen=True)
@@ -193,6 +198,9 @@ def orderbook_features_from_frame(
         target_name = f"future_mid_return_{horizon}"
         target_exprs.append((pl.col("mid_price").shift(-horizon).over("symbol") / pl.col("mid_price") - 1.0).alias(target_name))
         target_exprs.append((pl.col("mid_price").shift(-horizon).over("symbol") > pl.col("mid_price")).cast(pl.Int8).alias(f"mid_direction_up_{horizon}"))
+        target_exprs.append(pl.col("mid_price").shift(-horizon).over("symbol").alias(f"future_mid_price_{horizon}"))
+        target_exprs.append(pl.col("best_bid").shift(-horizon).over("symbol").alias(f"future_best_bid_{horizon}"))
+        target_exprs.append(pl.col("best_ask").shift(-horizon).over("symbol").alias(f"future_best_ask_{horizon}"))
     return out.with_columns(target_exprs)
 
 
@@ -365,6 +373,35 @@ def _daily_returns(
     )
 
 
+def _target_horizon(target_column: str) -> int | None:
+    match = re.fullmatch(r"future_mid_return_(\d+)", target_column)
+    if match is None:
+        return None
+    return int(match.group(1))
+
+
+def _optional_float_expr(frame: pl.DataFrame, column: str) -> pl.Expr:
+    if column in frame.columns:
+        return pl.col(column).cast(pl.Float64, strict=False)
+    return pl.lit(None, dtype=pl.Float64)
+
+
+def _compound_total(returns: NDArray[np.float64]) -> float:
+    if returns.size == 0:
+        return 0.0
+    return float(np.prod(returns + 1.0) - 1.0)
+
+
+def _max_drawdown(equity_values: list[float]) -> float:
+    if not equity_values:
+        return 0.0
+    equity = np.asarray(equity_values, dtype=np.float64)
+    peaks = np.maximum.accumulate(equity)
+    drawdowns = equity / peaks - 1.0
+    value = float(np.min(drawdowns))
+    return value if math.isfinite(value) else 0.0
+
+
 def _clean_prediction_frame(frame: pl.DataFrame, config: OrderBookBacktestConfig) -> pl.DataFrame:
     required = {config.prediction_column, config.target_column, config.relative_spread_column}
     missing = required - set(frame.columns)
@@ -404,12 +441,18 @@ def run_orderbook_signal_backtest(
         raise ValueError("min_signal_abs must be non-negative")
     if cfg.min_edge_over_cost < 0.0:
         raise ValueError("min_edge_over_cost must be non-negative")
+    if cfg.min_edge_to_cost_ratio is not None and cfg.min_edge_to_cost_ratio < 0.0:
+        raise ValueError("min_edge_to_cost_ratio must be non-negative")
     if cfg.max_relative_spread is not None and cfg.max_relative_spread < 0.0:
         raise ValueError("max_relative_spread must be non-negative")
     if cfg.min_entry_depth is not None and cfg.min_entry_depth < 0.0:
         raise ValueError("min_entry_depth must be non-negative")
+    if cfg.spread_cost_multiplier < 0.0:
+        raise ValueError("spread_cost_multiplier must be non-negative")
     if cfg.fee_bps < 0.0:
         raise ValueError("fee_bps must be non-negative")
+    if cfg.slippage_bps < 0.0:
+        raise ValueError("slippage_bps must be non-negative")
     if cfg.min_entry_depth is not None and not {"bid_depth_1", "ask_depth_1"}.issubset(set(frame.columns)):
         raise ValueError("min_entry_depth requires bid_depth_1 and ask_depth_1 columns")
 
@@ -428,13 +471,26 @@ def run_orderbook_signal_backtest(
                 "total_return": 0.0,
                 "cost_drag_return": 0.0,
                 "hit_rate": 0.0,
+                "gross_hit_rate": 0.0,
+                "net_hit_rate": 0.0,
                 "avg_trade_gross_return": 0.0,
                 "avg_trade_net_return": 0.0,
                 "avg_trade_cost_return": 0.0,
+                "avg_spread_cost_return": 0.0,
+                "avg_fee_cost_return": 0.0,
+                "avg_slippage_cost_return": 0.0,
+                "avg_edge_to_cost_ratio": 0.0,
                 "per_trade_sharpe_ratio": 0.0,
                 "trade_sharpe_ratio": 0.0,
                 "daily_sharpe_ratio": 0.0,
                 "daily_return_count": 0,
+                "max_drawdown": 0.0,
+                "long_trade_count": 0,
+                "short_trade_count": 0,
+                "long_total_return": 0.0,
+                "short_total_return": 0.0,
+                "long_avg_net_return": 0.0,
+                "short_avg_net_return": 0.0,
                 "candidate_count": 0,
                 "filtered_count": 0,
                 "ending_equity": cfg.starting_equity,
@@ -445,19 +501,100 @@ def run_orderbook_signal_backtest(
     y_true = clean[cfg.target_column].to_numpy().astype(np.float64)
     direction_acc = float(np.mean((y_pred > 0.0) == (y_true > 0.0)))
     fee_return = 2.0 * cfg.fee_bps * 1e-4
+    slippage_return = 2.0 * cfg.slippage_bps * 1e-4
+    horizon = _target_horizon(cfg.target_column)
+    future_mid_column = f"future_mid_price_{horizon}" if horizon is not None else ""
+    future_bid_column = f"future_best_bid_{horizon}" if horizon is not None else ""
+    future_ask_column = f"future_best_ask_{horizon}" if horizon is not None else ""
+    signal_expr = -pl.col(cfg.prediction_column) if cfg.invert_signal else pl.col(cfg.prediction_column)
+    entry_mid_expr = _optional_float_expr(clean, "mid_price")
+    entry_bid_expr = (
+        _optional_float_expr(clean, "best_bid")
+        if "best_bid" in clean.columns
+        else entry_mid_expr * (1.0 - (pl.col(cfg.relative_spread_column) / 2.0))
+    )
+    entry_ask_expr = (
+        _optional_float_expr(clean, "best_ask")
+        if "best_ask" in clean.columns
+        else entry_mid_expr * (1.0 + (pl.col(cfg.relative_spread_column) / 2.0))
+    )
+    exit_mid_expr = (
+        _optional_float_expr(clean, future_mid_column)
+        if future_mid_column in clean.columns
+        else entry_mid_expr * (1.0 + pl.col(cfg.target_column))
+    )
+    exit_bid_expr = (
+        _optional_float_expr(clean, future_bid_column)
+        if future_bid_column in clean.columns
+        else exit_mid_expr * (1.0 - (pl.col(cfg.relative_spread_column) / 2.0))
+    )
+    exit_ask_expr = (
+        _optional_float_expr(clean, future_ask_column)
+        if future_ask_column in clean.columns
+        else exit_mid_expr * (1.0 + (pl.col(cfg.relative_spread_column) / 2.0))
+    )
     candidates = (
-        clean.filter((pl.col(cfg.prediction_column).abs() >= cfg.min_signal_abs) & (pl.col(cfg.prediction_column) != 0.0))
+        clean.with_columns(signal_expr.alias("__decision_signal"))
+        .filter((pl.col("__decision_signal").abs() >= cfg.min_signal_abs) & (pl.col("__decision_signal") != 0.0))
         .with_columns(
             [
-                pl.when(pl.col(cfg.prediction_column) > 0.0).then(1.0).otherwise(-1.0).alias("position_side"),
-                pl.col(cfg.prediction_column).abs().alias("signal_abs"),
-                (pl.col(cfg.relative_spread_column) + fee_return).alias("cost_return"),
+                pl.when(pl.col("__decision_signal") > 0.0).then(1.0).otherwise(-1.0).alias("position_side"),
+                pl.when(pl.col("__decision_signal") > 0.0).then(pl.lit("long")).otherwise(pl.lit("short")).alias("side"),
+                pl.col(cfg.prediction_column).alias("predicted_return"),
+                pl.col("__decision_signal").alias("decision_signal_return"),
+                pl.col("__decision_signal").abs().alias("signal_abs"),
+                entry_mid_expr.alias("entry_mid"),
+                entry_bid_expr.alias("entry_bid"),
+                entry_ask_expr.alias("entry_ask"),
+                exit_mid_expr.alias("exit_mid"),
+                exit_bid_expr.alias("exit_bid"),
+                exit_ask_expr.alias("exit_ask"),
+                pl.col(cfg.target_column).alias("realized_mid_return"),
+                pl.lit(fee_return).alias("fee_cost_return"),
+                pl.lit(slippage_return).alias("slippage_cost_return"),
+                pl.lit(horizon).alias("holding_horizon"),
             ]
         )
-        .with_columns((pl.col("signal_abs") - pl.col("cost_return")).alias("predicted_edge_over_cost"))
+        .with_columns(
+            pl.when(pl.col("position_side") > 0.0)
+            .then(((pl.col("entry_ask") - pl.col("entry_mid")) + (pl.col("exit_mid") - pl.col("exit_bid"))) / pl.col("entry_mid"))
+            .otherwise(((pl.col("entry_mid") - pl.col("entry_bid")) + (pl.col("exit_ask") - pl.col("exit_mid"))) / pl.col("entry_mid"))
+            .alias("__price_spread_cost_return")
+        )
+        .with_columns(
+            (
+                pl.when(
+                    pl.col("__price_spread_cost_return").is_finite()
+                    & pl.col("__price_spread_cost_return").is_not_null()
+                    & (pl.col("__price_spread_cost_return") >= 0.0)
+                )
+                .then(pl.col("__price_spread_cost_return"))
+                .otherwise(pl.col(cfg.relative_spread_column))
+                * cfg.spread_cost_multiplier
+            ).alias("spread_cost_return")
+        )
+        .with_columns(
+            (
+                pl.col("spread_cost_return")
+                + pl.col("fee_cost_return")
+                + pl.col("slippage_cost_return")
+            ).alias("estimated_round_trip_cost")
+        )
+        .with_columns(
+            [
+                pl.col("estimated_round_trip_cost").alias("cost_return"),
+                (pl.col("signal_abs") - pl.col("estimated_round_trip_cost")).alias("predicted_edge_over_cost"),
+                pl.when(pl.col("estimated_round_trip_cost") > 0.0)
+                .then(pl.col("signal_abs") / pl.col("estimated_round_trip_cost"))
+                .otherwise(float("inf"))
+                .alias("edge_to_cost_ratio"),
+            ]
+        )
     )
     candidate_count = candidates.height
     trade_frame = candidates.filter(pl.col("predicted_edge_over_cost") >= cfg.min_edge_over_cost)
+    if cfg.min_edge_to_cost_ratio is not None:
+        trade_frame = trade_frame.filter(pl.col("edge_to_cost_ratio") > cfg.min_edge_to_cost_ratio)
     if cfg.max_relative_spread is not None:
         trade_frame = trade_frame.filter(pl.col(cfg.relative_spread_column) <= cfg.max_relative_spread)
     if cfg.min_entry_depth is not None:
@@ -484,13 +621,26 @@ def run_orderbook_signal_backtest(
                 "total_return": 0.0,
                 "cost_drag_return": 0.0,
                 "hit_rate": 0.0,
+                "gross_hit_rate": 0.0,
+                "net_hit_rate": 0.0,
                 "avg_trade_gross_return": 0.0,
                 "avg_trade_net_return": 0.0,
                 "avg_trade_cost_return": 0.0,
+                "avg_spread_cost_return": 0.0,
+                "avg_fee_cost_return": 0.0,
+                "avg_slippage_cost_return": 0.0,
+                "avg_edge_to_cost_ratio": 0.0,
                 "per_trade_sharpe_ratio": 0.0,
                 "trade_sharpe_ratio": 0.0,
                 "daily_sharpe_ratio": 0.0,
                 "daily_return_count": 0,
+                "max_drawdown": 0.0,
+                "long_trade_count": 0,
+                "short_trade_count": 0,
+                "long_total_return": 0.0,
+                "short_total_return": 0.0,
+                "long_avg_net_return": 0.0,
+                "short_avg_net_return": 0.0,
                 "candidate_count": candidate_count,
                 "filtered_count": filtered_count,
                 "ending_equity": cfg.starting_equity,
@@ -501,7 +651,15 @@ def run_orderbook_signal_backtest(
         [
             (pl.col("position_side") * pl.col(cfg.target_column)).alias("gross_return"),
         ]
-    ).with_columns((pl.col("gross_return") - pl.col("cost_return")).alias("net_return"))
+    ).with_columns(
+        [
+            (pl.col("gross_return") - pl.col("cost_return")).alias("net_return"),
+            (pl.col("gross_return") > 0.0).alias("prediction_direction_correct"),
+            (pl.col("gross_return") > 0.0).alias("gross_hit"),
+            ((pl.col("gross_return") - pl.col("cost_return")) > 0.0).alias("net_hit"),
+            pl.col(cfg.event_time_column).alias("timestamp") if cfg.event_time_column in trade_frame.columns else pl.lit(None).alias("timestamp"),
+        ]
+    )
 
     equity = cfg.starting_equity
     gross_equity = cfg.starting_equity
@@ -521,6 +679,12 @@ def run_orderbook_signal_backtest(
     gross_returns = trades["gross_return"].to_numpy().astype(np.float64)
     net_returns = trades["net_return"].to_numpy().astype(np.float64)
     cost_returns = trades["cost_return"].to_numpy().astype(np.float64)
+    spread_cost_returns = trades["spread_cost_return"].to_numpy().astype(np.float64)
+    fee_cost_returns = trades["fee_cost_return"].to_numpy().astype(np.float64)
+    slippage_cost_returns = trades["slippage_cost_return"].to_numpy().astype(np.float64)
+    edge_to_cost_ratios = trades["edge_to_cost_ratio"].to_numpy().astype(np.float64)
+    long_returns = trades.filter(pl.col("position_side") > 0.0)["net_return"].to_numpy().astype(np.float64)
+    short_returns = trades.filter(pl.col("position_side") < 0.0)["net_return"].to_numpy().astype(np.float64)
     daily_returns = _daily_returns(
         trades,
         event_time_column=cfg.event_time_column,
@@ -539,13 +703,28 @@ def run_orderbook_signal_backtest(
         "total_return": total,
         "cost_drag_return": gross_total - total,
         "hit_rate": float(np.mean(net_returns > 0.0)),
+        "gross_hit_rate": float(np.mean(gross_returns > 0.0)),
+        "net_hit_rate": float(np.mean(net_returns > 0.0)),
         "avg_trade_gross_return": float(np.mean(gross_returns)),
         "avg_trade_net_return": float(np.mean(net_returns)),
         "avg_trade_cost_return": float(np.mean(cost_returns)),
+        "avg_spread_cost_return": float(np.mean(spread_cost_returns)),
+        "avg_fee_cost_return": float(np.mean(fee_cost_returns)),
+        "avg_slippage_cost_return": float(np.mean(slippage_cost_returns)),
+        "avg_edge_to_cost_ratio": float(np.mean(edge_to_cost_ratios[np.isfinite(edge_to_cost_ratios)]))
+        if np.any(np.isfinite(edge_to_cost_ratios))
+        else 0.0,
         "per_trade_sharpe_ratio": _sharpe_ratio(net_returns, annualization=1.0),
         "trade_sharpe_ratio": _sharpe_ratio(net_returns, annualization=float(net_returns.size)),
         "daily_sharpe_ratio": _sharpe_ratio(daily_returns, annualization=252.0),
         "daily_return_count": int(daily_returns.size),
+        "max_drawdown": _max_drawdown(equity_values),
+        "long_trade_count": int(long_returns.size),
+        "short_trade_count": int(short_returns.size),
+        "long_total_return": _compound_total(long_returns),
+        "short_total_return": _compound_total(short_returns),
+        "long_avg_net_return": float(np.mean(long_returns)) if long_returns.size else 0.0,
+        "short_avg_net_return": float(np.mean(short_returns)) if short_returns.size else 0.0,
         "candidate_count": candidate_count,
         "filtered_count": filtered_count,
         "avg_signal_abs": float(cast(float, trades["signal_abs"].mean())),
@@ -755,6 +934,12 @@ def run_orderbook_walk_forward(
 
     prediction_frames: list[pl.DataFrame] = []
     fold_metrics: list[dict[str, float | int]] = []
+    horizon = _target_horizon(cfg.target_column)
+    future_keep_columns = (
+        [f"future_mid_price_{horizon}", f"future_best_bid_{horizon}", f"future_best_ask_{horizon}"]
+        if horizon is not None
+        else []
+    )
     keep_columns = [
         col
         for col in (
@@ -762,10 +947,15 @@ def run_orderbook_walk_forward(
             cfg.event_time_column,
             "row_index",
             "source_file",
+            "mid_price",
+            "best_bid",
+            "best_ask",
+            "spread",
             "relative_spread",
             "bid_depth_1",
             "ask_depth_1",
             cfg.target_column,
+            *future_keep_columns,
         )
         if col in clean.columns
     ]
