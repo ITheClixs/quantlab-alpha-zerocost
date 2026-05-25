@@ -16,7 +16,7 @@ def test_expanding_window_folds_are_chronological() -> None:
     for f in folds:
         assert max(f.train_dates) < min(f.validation_dates)
         assert (min(f.validation_dates) - max(f.train_dates)).days >= cfg.purge_days
-    for prev, nxt in zip(folds, folds[1:], strict=True):
+    for prev, nxt in zip(folds[:-1], folds[1:], strict=True):
         assert set(prev.train_dates).issubset(set(nxt.train_dates))
 
 
@@ -24,7 +24,7 @@ def test_embargo_excludes_post_validation_window_from_next_train() -> None:
     dates = [date(2020, 1, 1) + timedelta(days=i) for i in range(500)]
     cfg = CVConfig()
     folds = build_expanding_window_folds(dev_window_dates=dates, cv=cfg)
-    for prev, nxt in zip(folds, folds[1:], strict=True):
+    for prev, nxt in zip(folds[:-1], folds[1:], strict=True):
         embargo_start = max(prev.validation_dates) + timedelta(days=1)
         embargo = {embargo_start + timedelta(days=k) for k in range(cfg.embargo_days)}
         assert embargo.isdisjoint(set(nxt.train_dates))
