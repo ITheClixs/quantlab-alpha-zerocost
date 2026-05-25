@@ -74,9 +74,12 @@ def write_research_outputs(
     candidate_columns = [
         "strategy_id",
         "family",
+        "execution_profile",
         "period",
         "net_total_return",
         "net_daily_sharpe",
+        "delay_net_total_return",
+        "delay_net_daily_sharpe",
         "max_drawdown",
         "trade_count",
         "pass_gate",
@@ -107,6 +110,7 @@ def write_research_outputs(
                 for column in [
                     "strategy_id",
                     "stress",
+                    "execution_profile",
                     "cost_multiplier",
                     "execution_delay_bars",
                     "net_total_return",

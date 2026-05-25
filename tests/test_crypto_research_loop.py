@@ -102,6 +102,54 @@ def test_run_variant_backtest_applies_delay_and_turnover_costs() -> None:
     assert set(no_cost.trades.columns) >= {"timestamp", "side", "gross_return", "cost_return", "net_return"}
 
 
+def test_run_variant_backtest_applies_cost_aware_score_filter() -> None:
+    frame = _synthetic_panel(rows=120)
+    variant = StrategyVariant(
+        strategy_id="unit_momentum",
+        family="momentum",
+        feature_set="close_return",
+        parameters={"lookback": 3, "threshold": 0.0, "vol_filter": "none"},
+        horizon=1,
+        entry_rule="sign(close / close.shift(lookback) - 1)",
+        exit_rule="rebalance each bar",
+        execution_assumption="one-bar delayed taker execution",
+        cost_assumption="fee + half spread + slippage per unit turnover",
+    )
+
+    base = run_variant_backtest(frame, variant, config=BacktestConfig(fee_bps=4.0))
+    filtered = run_variant_backtest(
+        frame,
+        variant,
+        config=BacktestConfig(fee_bps=4.0, min_edge_to_cost_ratio=10.0),
+    )
+
+    assert filtered.metrics["trade_count"] < base.metrics["trade_count"]
+    assert filtered.metrics["min_edge_to_cost_ratio"] == 10.0
+
+
+def test_run_variant_backtest_applies_side_and_cooldown_filters() -> None:
+    frame = _synthetic_panel(rows=120)
+    variant = StrategyVariant(
+        strategy_id="unit_random",
+        family="baseline",
+        feature_set="deterministic_random",
+        parameters={"threshold": 0.0},
+        horizon=1,
+        entry_rule="deterministic pseudo-random sign",
+        exit_rule="rebalance each bar",
+        execution_assumption="one-bar delayed taker execution",
+        cost_assumption="fee + half spread + slippage per unit turnover",
+    )
+
+    base = run_variant_backtest(frame, variant, config=BacktestConfig(fee_bps=0.0))
+    long_only = run_variant_backtest(frame, variant, config=BacktestConfig(fee_bps=0.0, allowed_side="long_only"))
+    cooled = run_variant_backtest(frame, variant, config=BacktestConfig(fee_bps=0.0, cooldown_bars=20))
+
+    assert set(long_only.trades.get_column("side").unique().to_list()) <= {"long", "flat"}
+    assert cooled.metrics["trade_count"] < base.metrics["trade_count"]
+    assert cooled.metrics["cooldown_bars"] == 20
+
+
 def test_estimate_pbo_flags_overfit_winners() -> None:
     scores = pl.DataFrame(
         {

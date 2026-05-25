@@ -19,6 +19,7 @@ def _subprocess_env() -> dict[str, str]:
             "PATH", "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin"
         ),
         "HOME": os.environ.get("HOME", str(Path.home())),
+        "UV_CACHE_DIR": os.environ.get("UV_CACHE_DIR", ".uv-cache"),
     }
 
 

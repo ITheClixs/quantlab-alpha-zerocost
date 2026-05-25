@@ -20,6 +20,10 @@ class BacktestConfig:
     max_position: float = 1.0
     cost_multiplier: float = 1.0
     invert_signal: bool = False
+    min_abs_score: float = 0.0
+    min_edge_to_cost_ratio: float = 0.0
+    cooldown_bars: int = 0
+    allowed_side: str = "both"
 
 
 @dataclass(frozen=True)
@@ -136,9 +140,30 @@ def build_score(frame: pl.DataFrame, variant: StrategyVariant) -> np.ndarray:
     return np.nan_to_num(score.astype(np.float64), nan=0.0, posinf=0.0, neginf=0.0)
 
 
-def _signal_from_score(frame: pl.DataFrame, variant: StrategyVariant, score: np.ndarray) -> np.ndarray:
+def _round_trip_cost(config: BacktestConfig) -> float:
+    return (config.fee_bps + config.half_spread_bps + config.slippage_bps) * 1e-4 * config.cost_multiplier
+
+
+def _signal_from_score(
+    frame: pl.DataFrame,
+    variant: StrategyVariant,
+    score: np.ndarray,
+    *,
+    config: BacktestConfig | None = None,
+) -> np.ndarray:
     threshold = float(variant.parameters.get("threshold", 0.0))
+    if config is not None:
+        threshold = max(threshold, config.min_abs_score)
+        if config.min_edge_to_cost_ratio > 0.0:
+            threshold = max(threshold, config.min_edge_to_cost_ratio * _round_trip_cost(config))
     signal = np.where(score > threshold, 1.0, np.where(score < -threshold, -1.0, 0.0)).astype(np.float64)
+    if config is not None:
+        if config.allowed_side == "long_only":
+            signal = np.where(signal > 0.0, signal, 0.0)
+        elif config.allowed_side == "short_only":
+            signal = np.where(signal < 0.0, signal, 0.0)
+        elif config.allowed_side != "both":
+            raise ValueError("allowed_side must be one of: both, long_only, short_only")
     if variant.parameters.get("vol_filter") in {"low", "high"}:
         returns = pl.col("close") / pl.col("close").shift(1) - 1.0
         vol = returns.rolling_std(window_size=120, min_samples=60)
@@ -187,11 +212,33 @@ def _apply_holding_horizon(signal: np.ndarray, horizon: int) -> np.ndarray:
     return out
 
 
+def _apply_cooldown(position: np.ndarray, cooldown_bars: int) -> np.ndarray:
+    if cooldown_bars <= 0:
+        return position.astype(np.float64)
+    out = np.zeros_like(position, dtype=np.float64)
+    current = 0.0
+    last_entry = -cooldown_bars
+    for index, target in enumerate(position):
+        target = float(target)
+        if target == 0.0:
+            current = 0.0
+        elif current == 0.0:
+            if index - last_entry >= cooldown_bars:
+                current = target
+                last_entry = index
+        elif target != current and index - last_entry >= cooldown_bars:
+            current = target
+            last_entry = index
+        out[index] = current
+    return out
+
+
 def run_variant_backtest(
     frame: pl.DataFrame,
     variant: StrategyVariant,
     *,
     config: BacktestConfig | None = None,
+    score: np.ndarray | None = None,
 ) -> BacktestResult:
     cfg = config or BacktestConfig()
     if frame.height < 3:
@@ -199,11 +246,17 @@ def run_variant_backtest(
     ordered = frame.sort("timestamp")
     close = ordered.get_column("close").to_numpy().astype(np.float64)
     timestamps = ordered.get_column("timestamp")
-    score = build_score(ordered, variant)
-    signal = _signal_from_score(ordered, variant, score)
+    score = build_score(ordered, variant) if score is None else score
+    if score.size != ordered.height:
+        raise ValueError("precomputed score length must match the backtest frame height")
+    signal = _signal_from_score(ordered, variant, score, config=cfg)
     if cfg.invert_signal:
         signal = -signal
-    raw_position = np.clip(_apply_holding_horizon(signal, variant.horizon), -cfg.max_position, cfg.max_position)
+    raw_position = np.clip(
+        _apply_cooldown(_apply_holding_horizon(signal, variant.horizon), cfg.cooldown_bars),
+        -cfg.max_position,
+        cfg.max_position,
+    )
     delayed_score = _shift(score, cfg.execution_delay_bars)
     delayed_signal = _shift(signal, cfg.execution_delay_bars)
     position = _shift(raw_position, cfg.execution_delay_bars)
@@ -212,7 +265,7 @@ def run_variant_backtest(
     prior_position = np.zeros_like(position)
     prior_position[1:] = position[:-1]
     turnover = np.abs(position - prior_position)
-    per_unit_cost = (cfg.fee_bps + cfg.half_spread_bps + cfg.slippage_bps) * 1e-4 * cfg.cost_multiplier
+    per_unit_cost = _round_trip_cost(cfg)
     cost_returns = turnover * per_unit_cost
     gross_returns = prior_position * returns
     net_returns = gross_returns - cost_returns
@@ -344,6 +397,10 @@ def _metrics_from_arrays(
         "fee_bps": config.fee_bps,
         "half_spread_bps": config.half_spread_bps,
         "slippage_bps": config.slippage_bps,
+        "min_abs_score": config.min_abs_score,
+        "min_edge_to_cost_ratio": config.min_edge_to_cost_ratio,
+        "cooldown_bars": config.cooldown_bars,
+        "allowed_side": config.allowed_side,
     }
 
 
@@ -383,6 +440,10 @@ def summarize_backtest_frames(
             "fee_bps": config.fee_bps,
             "half_spread_bps": config.half_spread_bps,
             "slippage_bps": config.slippage_bps,
+            "min_abs_score": config.min_abs_score,
+            "min_edge_to_cost_ratio": config.min_edge_to_cost_ratio,
+            "cooldown_bars": config.cooldown_bars,
+            "allowed_side": config.allowed_side,
         }
     daily = (
         pnl.with_columns(pl.col("timestamp").dt.date().alias("date"))

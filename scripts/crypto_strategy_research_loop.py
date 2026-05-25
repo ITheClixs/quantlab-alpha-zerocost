@@ -4,6 +4,7 @@ import argparse
 import json
 import subprocess
 import sys
+from dataclasses import replace
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -13,6 +14,7 @@ import polars as pl
 from quant_research_stack.crypto_research.backtest import (
     BacktestConfig,
     BacktestResult,
+    build_score,
     run_variant_backtest,
     summarize_backtest_frames,
 )
@@ -47,6 +49,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--slippage-bps", type=float, default=1.0)
     parser.add_argument("--execution-delay-bars", type=int, default=1)
     parser.add_argument("--notional-usd", type=float, default=100_000.0)
+    parser.add_argument("--profile-set", choices=["base", "monetization"], default="base")
+    parser.add_argument("--promotion-sharpe", type=float, default=5.0)
+    parser.add_argument("--promotion-monthly-net", type=float, default=0.10)
+    parser.add_argument("--min-validation-trades", type=int, default=100)
+    parser.add_argument("--promotion-min-trades", type=int, default=100)
     return parser.parse_args()
 
 
@@ -129,8 +136,17 @@ def _best_day_concentration(pnl: pl.DataFrame) -> float:
     return _to_float(daily.get_column("net_return").max()) / positive_total
 
 
-def _select_validation_candidates(rows: list[dict[str, Any]], *, limit: int) -> list[dict[str, Any]]:
-    validation = [row for row in rows if row.get("period") == "validation" and int(row.get("trade_count", 0)) > 0]
+def _select_validation_candidates(
+    rows: list[dict[str, Any]],
+    *,
+    limit: int,
+    min_trades: int,
+) -> list[dict[str, Any]]:
+    validation = [
+        row
+        for row in rows
+        if row.get("period") == "validation" and int(row.get("trade_count", 0)) >= min_trades
+    ]
     return sorted(
         validation,
         key=lambda row: (
@@ -151,6 +167,11 @@ def _base_config(
     half_spread_bps: float | None = None,
     slippage_bps: float | None = None,
     invert_signal: bool = False,
+    min_abs_score: float = 0.0,
+    min_edge_to_cost_ratio: float = 0.0,
+    cooldown_bars: int = 0,
+    allowed_side: str = "both",
+    max_position: float = 1.0,
 ) -> BacktestConfig:
     return BacktestConfig(
         fee_bps=args.fee_bps if fee_bps is None else fee_bps,
@@ -160,6 +181,61 @@ def _base_config(
         notional_usd=args.notional_usd,
         cost_multiplier=cost_multiplier,
         invert_signal=invert_signal,
+        min_abs_score=min_abs_score,
+        min_edge_to_cost_ratio=min_edge_to_cost_ratio,
+        cooldown_bars=cooldown_bars,
+        allowed_side=allowed_side,
+        max_position=max_position,
+    )
+
+
+def _execution_profiles(args: argparse.Namespace) -> list[tuple[str, BacktestConfig]]:
+    base = _base_config(args)
+    if args.profile_set == "base":
+        return [("base", base)]
+    profiles = [
+        ("base", base),
+        ("long_only", _base_config(args, allowed_side="long_only")),
+        ("short_only", _base_config(args, allowed_side="short_only")),
+        ("edge_1", _base_config(args, min_edge_to_cost_ratio=1.0)),
+        ("edge_2", _base_config(args, min_edge_to_cost_ratio=2.0)),
+        ("edge_4", _base_config(args, min_edge_to_cost_ratio=4.0)),
+        ("cooldown_60", _base_config(args, cooldown_bars=60)),
+        ("cooldown_360", _base_config(args, cooldown_bars=360)),
+        ("long_edge_2", _base_config(args, allowed_side="long_only", min_edge_to_cost_ratio=2.0)),
+        ("short_edge_2", _base_config(args, allowed_side="short_only", min_edge_to_cost_ratio=2.0)),
+        ("long_cooldown_360", _base_config(args, allowed_side="long_only", cooldown_bars=360)),
+        (
+            "edge_2_cooldown_360_half",
+            _base_config(args, min_edge_to_cost_ratio=2.0, cooldown_bars=360, max_position=0.5),
+        ),
+    ]
+    return profiles
+
+
+def _replace_config(config: BacktestConfig, **changes: Any) -> BacktestConfig:
+    return replace(config, **changes)
+
+
+def _profile_variant(variant: StrategyVariant, profile_id: str, config: BacktestConfig) -> StrategyVariant:
+    params = dict(variant.parameters)
+    params["execution_profile"] = profile_id
+    params["min_abs_score"] = config.min_abs_score
+    params["min_edge_to_cost_ratio"] = config.min_edge_to_cost_ratio
+    params["cooldown_bars"] = config.cooldown_bars
+    params["allowed_side"] = config.allowed_side
+    params["max_position"] = config.max_position
+    return StrategyVariant(
+        strategy_id=f"{variant.strategy_id}__{profile_id}",
+        family=variant.family,
+        feature_set=variant.feature_set,
+        parameters=params,
+        horizon=variant.horizon,
+        entry_rule=variant.entry_rule,
+        exit_rule=variant.exit_rule,
+        execution_assumption=f"{variant.execution_assumption}; profile={profile_id}",
+        cost_assumption=variant.cost_assumption,
+        source=variant.source,
     )
 
 
@@ -212,22 +288,28 @@ def _gate_row(
     cost_2x_positive: bool,
     delay_positive: bool,
     best_day_concentration: float,
+    promotion_sharpe: float,
+    promotion_monthly_net: float,
+    promotion_min_trades: int,
 ) -> tuple[bool, list[str]]:
     reasons: list[str] = []
     net_sharpe = float(row.get("net_daily_sharpe", 0.0))
     net_return = float(row.get("net_total_return", 0.0))
     max_drawdown = abs(float(row.get("max_drawdown", 0.0)))
     calmar = net_return / max(max_drawdown, 1e-12)
-    if net_sharpe < 1.0:
-        reasons.append("net daily Sharpe below 1.0")
+    trade_count = int(row.get("trade_count", 0))
+    if net_sharpe < promotion_sharpe:
+        reasons.append(f"net daily Sharpe below {promotion_sharpe:g}")
     if net_return <= 0.0:
         reasons.append("net total return not positive")
     if calmar <= 1.0:
         reasons.append("Calmar not above 1.0")
     if pbo >= 0.25:
         reasons.append("PBO not below 0.25")
-    if monthly_net_mean < 0.05:
-        reasons.append("average monthly net return below 5%")
+    if monthly_net_mean < promotion_monthly_net:
+        reasons.append(f"average monthly net return below {promotion_monthly_net:.1%}")
+    if trade_count < promotion_min_trades:
+        reasons.append(f"holdout trade count below {promotion_min_trades}")
     if not cost_2x_positive:
         reasons.append("not positive under 2x costs")
     if not delay_positive:
@@ -274,46 +356,76 @@ def main() -> int:
     write_dataset_manifest(output_dir / "dataset_manifest.json", manifest)
 
     variants = generate_strategy_variants(target_count=args.target_count)
-    registry = _registry_frame(variants, periods_payload)
+    profiles = _execution_profiles(args)
+    profiled_variants = [
+        _profile_variant(variant, profile_id, profile_config)
+        for variant in variants
+        for profile_id, profile_config in profiles
+    ]
+    registry = _registry_frame(profiled_variants, periods_payload)
     config = _base_config(args)
     blocks = _block_periods(frame, block_count=args.pbo_blocks)
     all_rows: list[dict[str, Any]] = []
     pbo_rows: list[dict[str, Any]] = []
-    variants_by_id = {variant.strategy_id: variant for variant in variants}
+    variants_by_id = {variant.strategy_id: variant for variant in profiled_variants}
+    profile_config_by_id = {
+        f"{variant.strategy_id}__{profile_id}": profile_config
+        for variant in variants
+        for profile_id, profile_config in profiles
+    }
+    base_variant_by_id = {
+        f"{variant.strategy_id}__{profile_id}": variant
+        for variant in variants
+        for profile_id, _profile_config in profiles
+    }
 
-    print(f"testing {len(variants)} variants over {frame.height:,} rows")
+    print(f"testing {len(profiled_variants)} profiled variants over {frame.height:,} rows")
     for index, variant in enumerate(variants, start=1):
-        result = run_variant_backtest(frame, variant, config=config)
-        for period in [periods.development, periods.validation]:
-            row = _summarize_period(result, variant, config=config, period=period)
-            row["horizon"] = variant.horizon
-            row["feature_set"] = variant.feature_set
-            row["pass_gate"] = False
-            all_rows.append(row)
-        for block_index, block_period in enumerate(blocks):
-            block_row = _summarize_period(result, variant, config=config, period=block_period)
-            pbo_rows.append(
-                {
-                    "strategy_id": variant.strategy_id,
-                    "block": block_index,
-                    "net_sharpe": float(block_row.get("net_daily_sharpe", 0.0)),
-                }
-            )
+        score = build_score(frame, variant)
+        for profile_id, profile_config in profiles:
+            profiled_variant = _profile_variant(variant, profile_id, profile_config)
+            result = run_variant_backtest(frame, profiled_variant, config=profile_config, score=score)
+            for period in [periods.development, periods.validation]:
+                row = _summarize_period(result, profiled_variant, config=profile_config, period=period)
+                row["horizon"] = profiled_variant.horizon
+                row["feature_set"] = profiled_variant.feature_set
+                row["execution_profile"] = profile_id
+                row["pass_gate"] = False
+                all_rows.append(row)
+            for block_index, block_period in enumerate(blocks):
+                block_row = _summarize_period(result, profiled_variant, config=profile_config, period=block_period)
+                pbo_rows.append(
+                    {
+                        "strategy_id": profiled_variant.strategy_id,
+                        "block": block_index,
+                        "net_sharpe": float(block_row.get("net_daily_sharpe", 0.0)),
+                    }
+                )
+            del result
         if index == 1 or index % 100 == 0 or index == len(variants):
-            print(f"  tested {index}/{len(variants)}")
-        del result
+            print(f"  tested {index}/{len(variants)} base variants ({index * len(profiles)}/{len(profiled_variants)} profiled)")
 
     pbo_scores = pl.DataFrame(pbo_rows)
     pbo_report = estimate_pbo(pbo_scores, score_column="net_sharpe", min_blocks=min(args.pbo_blocks, 6))
-    validation_candidates = _select_validation_candidates(all_rows, limit=args.finalists)
+    validation_candidates = _select_validation_candidates(
+        all_rows,
+        limit=args.finalists,
+        min_trades=args.min_validation_trades,
+    )
     best_validation_sharpe = max((float(row.get("net_daily_sharpe", 0.0)) for row in validation_candidates), default=0.0)
     pbo_payload = pbo_report.to_dict()
     pbo_payload["multiple_testing"] = approximate_multiple_testing_payload(
         best_validation_sharpe,
-        trial_count=len(variants),
+        trial_count=len(profiled_variants),
         observations=max(frame.height // (24 * 60), 1),
     )
     pbo_payload["tested_strategy_variants"] = len(variants)
+    pbo_payload["tested_profiled_variants"] = len(profiled_variants)
+    pbo_payload["profile_set"] = args.profile_set
+    pbo_payload["promotion_sharpe"] = args.promotion_sharpe
+    pbo_payload["promotion_monthly_net"] = args.promotion_monthly_net
+    pbo_payload["min_validation_trades"] = args.min_validation_trades
+    pbo_payload["promotion_min_trades"] = args.promotion_min_trades
     pbo_scores.write_parquet(output_dir / "pbo_scores.parquet")
     _write_json(output_dir / "pbo_scores.json", {"rows": pbo_rows[:1000], "truncated": len(pbo_rows) > 1000})
 
@@ -325,32 +437,42 @@ def main() -> int:
     for candidate in validation_candidates:
         strategy_id = str(candidate["strategy_id"])
         variant = variants_by_id[strategy_id]
-        base_result = run_variant_backtest(frame, variant, config=config)
+        finalist_config = profile_config_by_id[strategy_id]
+        base_variant = base_variant_by_id[strategy_id]
+        finalist_score = build_score(frame, base_variant)
+        base_result = run_variant_backtest(frame, variant, config=finalist_config, score=finalist_score)
         holdout_pnl = _slice_timestamp(base_result.pnl, periods.holdout)
         holdout_trades = _slice_timestamp(base_result.trades, periods.holdout) if not base_result.trades.is_empty() else base_result.trades
         audit_path = output_dir / f"per_trade_audit_{strategy_id}.parquet"
         holdout_trades.write_parquet(audit_path)
-        row = _summarize_period(base_result, variant, config=config, period=periods.holdout)
+        row = _summarize_period(base_result, variant, config=finalist_config, period=periods.holdout)
         row["horizon"] = variant.horizon
         row["feature_set"] = variant.feature_set
+        row["execution_profile"] = str(candidate.get("execution_profile", "base"))
         row["monthly_net_mean"] = _monthly_net_mean(holdout_pnl)
         row["best_day_concentration"] = _best_day_concentration(holdout_pnl)
 
         stress_results: dict[str, dict[str, Any]] = {}
         for label, stress_config in [
-            ("base", config),
-            ("no_cost", _base_config(args, fee_bps=0.0, half_spread_bps=0.0, slippage_bps=0.0)),
-            ("spread_only", _base_config(args, fee_bps=0.0, slippage_bps=0.0)),
-            ("fee_only", _base_config(args, half_spread_bps=0.0, slippage_bps=0.0)),
-            ("cost_2x", _base_config(args, cost_multiplier=2.0)),
-            ("cost_3x", _base_config(args, cost_multiplier=3.0)),
-            ("delay_plus_one", _base_config(args, delay=args.execution_delay_bars + 1)),
-            ("inverted_signal", _base_config(args, invert_signal=True)),
+            ("base", finalist_config),
+            ("no_cost", _replace_config(finalist_config, fee_bps=0.0, half_spread_bps=0.0, slippage_bps=0.0)),
+            ("spread_only", _replace_config(finalist_config, fee_bps=0.0, slippage_bps=0.0)),
+            ("fee_only", _replace_config(finalist_config, half_spread_bps=0.0, slippage_bps=0.0)),
+            ("cost_2x", _replace_config(finalist_config, cost_multiplier=2.0)),
+            ("cost_3x", _replace_config(finalist_config, cost_multiplier=3.0)),
+            ("delay_plus_one", _replace_config(finalist_config, execution_delay_bars=args.execution_delay_bars + 1)),
+            ("inverted_signal", _replace_config(finalist_config, invert_signal=True)),
         ]:
-            stress_result = base_result if label == "base" else run_variant_backtest(frame, variant, config=stress_config)
+            stress_result = base_result if label == "base" else run_variant_backtest(
+                frame,
+                variant,
+                config=stress_config,
+                score=finalist_score,
+            )
             stress_row = _summarize_period(stress_result, variant, config=stress_config, period=periods.holdout)
             stress_row["stress"] = label
             stress_row["horizon"] = variant.horizon
+            stress_row["execution_profile"] = str(candidate.get("execution_profile", "base"))
             cost_rows.append(stress_row)
             stress_results[label] = stress_row
 
@@ -361,6 +483,9 @@ def main() -> int:
             cost_2x_positive=float(stress_results["cost_2x"].get("net_total_return", 0.0)) > 0.0,
             delay_positive=float(stress_results["delay_plus_one"].get("net_total_return", 0.0)) > 0.0,
             best_day_concentration=float(row["best_day_concentration"]),
+            promotion_sharpe=args.promotion_sharpe,
+            promotion_monthly_net=args.promotion_monthly_net,
+            promotion_min_trades=args.promotion_min_trades,
         )
         row["pass_gate"] = pass_gate
         row["audit_path"] = str(audit_path)
