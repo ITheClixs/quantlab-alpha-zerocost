@@ -122,3 +122,61 @@ def persist_fast_v1_run(
         if art != "_artifact_sha256.json"
     }
     (run_dir / "_artifact_sha256.json").write_text(json.dumps(sha, sort_keys=True, indent=2))
+
+
+REQUIRED_FULL_V1_ARTIFACTS: tuple[str, ...] = (
+    *REQUIRED_FAST_V1_ARTIFACTS,
+    "models/catboost.cbm",
+    "models/catboost.config.json",
+    "models/mlp.pt",
+)
+
+
+def persist_full_v1_run(
+    *,
+    run_dir: Path,
+    config: AlphaEqConfig,
+    feature_cols: Sequence[str],
+    dev_panel: pl.DataFrame,
+    target: str,
+    enable_sequence: bool = False,  # noqa: ARG001 (reserved for Conv1D wiring)
+) -> None:
+    """Persist fast_v1 artifacts AND CatBoost + MLP (+ optional Conv1D)."""
+    persist_fast_v1_run(
+        run_dir=run_dir,
+        config=config,
+        feature_cols=feature_cols,
+        dev_panel=dev_panel,
+        target=target,
+    )
+    panel = dev_panel.drop_nulls(subset=[*list(feature_cols), target])
+    x = panel.select(list(feature_cols)).to_numpy().astype(np.float64)
+    y = panel[target].to_numpy().astype(np.float64)
+
+    from quant_research_stack.alpha_eq.models.catboost_model import (
+        CatBoostEqConfig,
+        CatBoostEqModel,
+    )
+    from quant_research_stack.alpha_eq.models.mlp import MLPEqConfig, MLPEqModel
+
+    cat_cfg = CatBoostEqConfig(seed=config.reproducibility.catboost_seed, iterations=200)
+    m_cat = CatBoostEqModel(cat_cfg)
+    m_cat.fit(x=x, y=y)
+    m_cat.save(
+        run_dir / "models" / "catboost.cbm",
+        config_path=run_dir / "models" / "catboost.config.json",
+    )
+
+    mlp_cfg = MLPEqConfig(
+        seed=config.reproducibility.torch_seed, max_epochs=10, hidden_dims=(64, 32)
+    )
+    m_mlp = MLPEqModel(mlp_cfg)
+    m_mlp.fit(x=x, y=y)
+    m_mlp.save(run_dir / "models" / "mlp.pt")
+
+    sha = {
+        art: _sha256_file(run_dir / art)
+        for art in REQUIRED_FULL_V1_ARTIFACTS
+        if art != "_artifact_sha256.json"
+    }
+    (run_dir / "_artifact_sha256.json").write_text(json.dumps(sha, sort_keys=True, indent=2))
