@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Callable
 from dataclasses import asdict, dataclass
 from pathlib import Path
+from typing import Any
 
 import lightgbm as lgb
 import numpy as np
@@ -48,9 +50,9 @@ class LightGBMEqModel:
             "verbose": -1,
         }
         train_set = lgb.Dataset(x, label=y)
-        valid_sets = [train_set]
-        valid_names = ["train"]
-        callbacks = []
+        valid_sets: list[lgb.Dataset] = [train_set]
+        valid_names: list[str] = ["train"]
+        callbacks: list[Callable[..., Any]] = []
         if x_val is not None and y_val is not None:
             valid_sets.append(lgb.Dataset(x_val, label=y_val))
             valid_names.append("valid")
