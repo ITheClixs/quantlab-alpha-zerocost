@@ -25,6 +25,16 @@ class FeatureConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
     enable_meta_features: bool = False
     noise_seed: int = 42
+    rolling_windows: tuple[int, ...] = (5, 20, 60)
+    momentum_horizons: tuple[int, ...] = (1, 2, 5, 10, 20, 60, 120, 252)
+    vix_proxy_fallback: str = "cross_sectional_vol_20"
+
+
+class RollingDiagnosticConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    enabled: bool = True
+    train_years: int = 10
+    valid_years: int = 2
 
 
 class CVConfig(BaseModel):
@@ -33,6 +43,7 @@ class CVConfig(BaseModel):
     n_folds: int = 5
     label_horizon_days: int = 1
     purge_safety_buffer: int = 2
+    rolling_diagnostic: RollingDiagnosticConfig = Field(default_factory=RollingDiagnosticConfig)
 
     @property
     def purge_days(self) -> int:
@@ -59,10 +70,26 @@ class ReproConfig(BaseModel):
     catboost_seed: int = 42
 
 
-_MODE_MODELS: dict[TrainingMode, tuple[str, ...]] = {
-    TrainingMode.FAST_V1: ("ridge", "lightgbm", "xgboost"),
-    TrainingMode.FULL_V1: ("ridge", "lightgbm", "xgboost", "catboost", "mlp", "sequence"),
-}
+class ModelsConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    fast_v1: tuple[str, ...] = ("ridge", "lightgbm", "xgboost")
+    full_v1: tuple[str, ...] = ("ridge", "lightgbm", "xgboost", "catboost", "mlp", "sequence")
+
+
+class OptunaTrialsConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    lightgbm: int = 50
+    xgboost: int = 30
+    catboost: int = 30
+    mlp: int = 20
+    sequence: int = 20
+    stacker: int = 30
+
+
+class OptunaConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    enable: bool = True
+    trials: OptunaTrialsConfig = Field(default_factory=OptunaTrialsConfig)
 
 
 class AlphaEqConfig(BaseModel):
@@ -71,11 +98,15 @@ class AlphaEqConfig(BaseModel):
     data: DataConfig = Field(default_factory=DataConfig)
     features: FeatureConfig = Field(default_factory=FeatureConfig)
     cv: CVConfig = Field(default_factory=CVConfig)
+    models: ModelsConfig = Field(default_factory=ModelsConfig)
+    optuna: OptunaConfig = Field(default_factory=OptunaConfig)
     stacker: StackerConfig = Field(default_factory=StackerConfig)
     reproducibility: ReproConfig = Field(default_factory=ReproConfig)
 
     def active_models(self) -> tuple[str, ...]:
-        return _MODE_MODELS[self.mode]
+        if self.mode == TrainingMode.FAST_V1:
+            return self.models.fast_v1
+        return self.models.full_v1
 
     @model_validator(mode="after")
     def _validate(self) -> AlphaEqConfig:
