@@ -1,8 +1,12 @@
-"""Replay an S4 audit JSONL log and reconstruct the position book."""
+"""Replay an S4 audit JSONL log and reconstruct the position book.
+
+Also supports `equity-backtest` subcommand for S1-EQ JSONL replay (spec §5.17).
+"""
 
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import sys
 from datetime import datetime
@@ -11,6 +15,19 @@ from pathlib import Path
 
 from quant_research_stack.brokers.order_types import Fill, OrderSide
 from quant_research_stack.execution.position_book import PositionBook
+
+
+def _verify_equity_backtest(audit_log: Path) -> int:
+    if not audit_log.exists():
+        print(f"missing audit log: {audit_log}")
+        return 2
+    with audit_log.open() as fh:
+        rows = [json.loads(line) for line in fh if line.strip()]
+    h_all = hashlib.sha256()
+    for r in rows:
+        h_all.update(json.dumps(r, sort_keys=True, separators=(",", ":")).encode())
+    print(f"rows={len(rows)} sha256={h_all.hexdigest()}")
+    return 0
 
 
 def replay_audit_to_book(audit_dir: Path, book: PositionBook) -> int:
@@ -52,6 +69,13 @@ def parse_args() -> argparse.Namespace:
 
 
 def main() -> int:
+    # equity-backtest subcommand dispatch (spec §5.17)
+    if len(sys.argv) > 1 and sys.argv[1] == "equity-backtest":
+        sub = argparse.ArgumentParser(prog="audit_replay_check.py equity-backtest")
+        sub.add_argument("--audit-log", required=True)
+        sub_args = sub.parse_args(sys.argv[2:])
+        return _verify_equity_backtest(Path(sub_args.audit_log))
+
     args = parse_args()
     book = PositionBook(
         snapshot_root=Path(args.snapshot_root),
