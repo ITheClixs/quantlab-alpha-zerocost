@@ -35,7 +35,10 @@ from quant_research_stack.alpha_eq.features.builder import (
     build_features,
 )
 from quant_research_stack.alpha_eq.features.labels import build_labels
-from quant_research_stack.alpha_eq.training.persist import persist_fast_v1_run
+from quant_research_stack.alpha_eq.training.persist import (
+    persist_fast_v1_run,
+    persist_full_v1_run,
+)
 
 console = Console()
 
@@ -46,6 +49,11 @@ def _parse_args() -> argparse.Namespace:
     p.add_argument("--mode", default="fast_v1", choices=[m.value for m in TrainingMode])
     p.add_argument("--equity-root", default="data/processed/equities")
     p.add_argument("--experiments-root", default="experiments/alpha_eq")
+    p.add_argument(
+        "--enable-sequence",
+        action="store_true",
+        help="enable Conv1D learner under full_v1 (requires 3-D temporal tensor)",
+    )
     return p.parse_args()
 
 
@@ -172,13 +180,23 @@ def main() -> int:
     run_dir = Path(args.experiments_root) / _run_id()
     run_dir.mkdir(parents=True, exist_ok=True)
 
-    persist_fast_v1_run(
-        run_dir=run_dir,
-        config=config,
-        feature_cols=feature_cols,
-        dev_panel=features,
-        target="y_xs",
-    )
+    if args.mode == TrainingMode.FAST_V1.value:
+        persist_fast_v1_run(
+            run_dir=run_dir,
+            config=config,
+            feature_cols=feature_cols,
+            dev_panel=features,
+            target="y_xs",
+        )
+    else:
+        persist_full_v1_run(
+            run_dir=run_dir,
+            config=config,
+            feature_cols=feature_cols,
+            dev_panel=features,
+            target="y_xs",
+            enable_sequence=args.enable_sequence,
+        )
 
     meta_path = run_dir / "metadata.json"
     meta = json.loads(meta_path.read_text())
