@@ -13,13 +13,72 @@
   - `S5 Options & Futures (full)` — separate asset-class pricing + cost models.
 
 > **Not investment advice.** All artifacts produced under this spec carry the
-> `not_investment_advice: true` footer.
+> `not_investment_advice: true` footer. The project is production-intended,
+> but research artifacts produced from it are not automatically investment
+> advice. If outputs are used to advise external users or to manage capital,
+> legal, regulatory, licensing, and compliance review is required before
+> deployment. See §7 for the full disclaimer.
 >
 > **Research-attitude reframe.** The methodology upgrades exist to distinguish
 > robust out-of-sample signal from overfit in-sample performance. They may
 > reduce false positives and may reject most candidates. **If no candidate
 > survives, that is a valid result.** The methodology measures whether success
 > is real; it does not manufacture it.
+
+---
+
+## 0. Production-intent framing (non-negotiables)
+
+This is not a toy research project. It is treated as a **production-intended
+quant research platform with hedge-fund-grade discipline, constrained by
+limited resources**. The goal is not to produce a good-looking backtest. The
+goal is to build a system **where bad strategies cannot pass**.
+
+Implementation planning, code review, and runtime behaviour all enforce the
+following twelve non-negotiables. They cannot be weakened to produce a
+profitable result. If no strategy survives them, that is a valid outcome.
+
+1. **No live or paper promotion from in-sample results.** Promotion decisions
+   require out-of-sample validation, holdout, paper trading, and shadow
+   deployment in sequence.
+2. **No final strategy selection using the permanent holdout.** Holdout is
+   read once for the selected finalists, never used for ranking or selection.
+3. **No current-constituent cross-sectional universe can be called
+   production-grade or institutional-grade.** Such universes are
+   research-only labelled.
+4. **No strategy can pass without realistic costs, spread, slippage,
+   funding/borrow where applicable, 2× cost stress, delay stress, PBO, DSR,
+   bootstrap CI, and concentration checks.** All of these are mandatory
+   gates, not opt-in.
+5. **No sentiment, fundamentals, news, or alternative data can enter promoted
+   models** unless timestamp integrity and leakage controls are proven via
+   the §3 FinBERT-style audit ladder.
+6. **Every dataset must have a manifest, source, hash, timestamp convention,
+   data-quality label, and reproducibility record.** Datasets without a
+   manifest cannot enter the pipeline.
+7. **Every strategy trial must be logged. Failed trials are not hidden.** The
+   selection funnel in §6.4 makes the full multiple-testing burden visible.
+8. **PBO and DSR must account for the full search process, not only the
+   final candidate.** `pbo_raw_global` and the full-pool DSR N are reported
+   alongside per-profile and per-family slices.
+9. **Any strategy with performance concentrated in one period, one trade,
+   one asset, or one regime must be downgraded or rejected.** Concentration
+   limits in §6.1 criterion #11 are mandatory.
+10. **Any production-intended strategy must pass staged promotion:**
+    research validation → permanent holdout → paper trading → monitored
+    shadow deployment → limited live capital only after review. Each stage
+    is a separate gate; skipping stages is forbidden.
+11. **The system must include risk limits, max drawdown controls, exposure
+    limits, kill switch, audit logs, reproducibility checks, and failure
+    alerts.** These are infrastructure, not strategy features.
+12. **The reporting language must distinguish four status tiers:**
+    `research_pass`, `promotion_eligible`, `paper_trade_candidate`,
+    `production_candidate`. See §6.1 for the precise definitions and
+    gating between tiers.
+
+Optimise for institutional-grade falsification, reproducibility, risk
+control, and honest strategy discovery. Do not optimise for looking
+profitable.
 
 ---
 
@@ -62,7 +121,7 @@ reproducible byte-for-byte.
 ```
 src/quant_research_stack/signal_research/
   __init__.py
-  registry.py                  # strategy registry (14-field schema per §3.6)
+  registry.py                  # strategy registry (mandatory schema per §3.6)
   data/                        # extended data feeds (§2)
     long_history.py            # yfinance 2005-2026
     hf_datasets.py             # HuggingFace dataset loaders (sentiment, fundamentals)
@@ -152,8 +211,15 @@ historical constituent reconstruction. For these, **constituent
 survivorship is N/A** and `promotion_eligible` is allowed even though the
 underlying data is still `public_snapshot_not_pit` (yfinance / Binance public
 snapshot). Vendor / snapshot limitations must still be disclosed in every
-report. This is captured operationally by the `promotion_eligible` criterion
-in §6.1 and is not a separate `data_quality_label` value.
+report. This is captured operationally by:
+- The manifest metadata field `constituent_survivorship_applicable: false`
+  on directly-traded artifacts (SPY, QQQ, BTCUSDT, ETHUSDT, etc.).
+- The `promotion_eligible` criterion in §6.1 which checks this metadata.
+
+`directly_traded_etf` is **not** a `data_quality_label` value. The data
+quality label remains `public_snapshot_not_pit` (or higher if upgraded);
+the promotion exception is carried by the separate
+`constituent_survivorship_applicable` flag.
 
 **Important:** current-only S&P 500 and current-only Nasdaq 100 constituents
 default to **`survivorship_prototype_only` or `public_snapshot_not_pit`**, NOT
@@ -231,7 +297,7 @@ Every Nasdaq report compares against:
 
 | Source | Loader | Coverage | Purpose | Data-quality tier |
 |---|---|---|---|---|
-| yfinance (extended) | `long_history.py` | 1993-2026 daily | 20-year backbone for SP500 + Nasdaq + ETFs | `public_snapshot_not_pit` (or `directly_traded_etf` for SPY/QQQ) |
+| yfinance (extended) | `long_history.py` | 1993-2026 daily | 20-year backbone for SP500 + Nasdaq + ETFs | `public_snapshot_not_pit` (every yfinance series; per-artifact metadata also carries `constituent_survivorship_applicable: false` for SPY/QQQ and similar directly-traded ETFs) |
 | HuggingFace datasets | `hf_datasets.py` | varies | Sentiment + fundamentals (research-only by default) | varies — must be classified per dataset |
 | FRED (via `fredapi`) | `fred.py` | 1950+ | DGS10, T10Y2Y, DTWEXBGS, GOLD, etc. | `public_snapshot_not_pit` (revision-adjusted via ALFRED is a Phase-2 upgrade) |
 | CBOE indices via yfinance | `cboe_proxies.py` | 1990-2026 | `^VIX`, `^VVIX`, `^SKEW`, `^GVZ`, `^OVX`, `^VXN` | `public_snapshot_not_pit` |
@@ -475,7 +541,9 @@ reporting is a secondary diagnostic.
 
 ### 3.6 Strategy registry schema
 
-Every signal in the menu registers with the following 14 fields:
+Every signal in the menu registers with the fields listed below. **All
+fields listed are mandatory** unless explicitly marked optional. The schema
+may carry additional optional fields beyond these.
 
 | Field | Type | Notes |
 |---|---|---|
@@ -496,7 +564,7 @@ Every signal in the menu registers with the following 14 fields:
 | `data_quality_requirements` | str | minimum tier acceptable |
 | `known_limitations` | list[str] | textual warnings |
 
-(Schema may carry additional optional fields; the 14 listed are mandatory.)
+(Schema may carry additional optional fields; all fields listed above are mandatory.)
 
 ### 3.7 Explicit rejection criteria per family
 
@@ -895,9 +963,12 @@ M4 gives stricter evaluation, not automatic credibility.
 
 ## 6. Success gates, reporting, milestones
 
-### 6.1 Per-strategy success gate — `research_pass` vs `promotion_eligible`
+### 6.1 Per-strategy status tiers (four levels)
 
-Per amendment §6.1, candidates are scored against **two** distinct status labels.
+Per the production-intent framing in §0, candidates are scored against
+**four** distinct status tiers, each strictly stricter than the previous:
+
+`research_pass` → `promotion_eligible` → `paper_trade_candidate` → `production_candidate`
 
 #### Status: `research_pass`
 
@@ -923,15 +994,66 @@ A candidate is **`research_pass`** iff all of the following hold:
 A candidate is **`promotion_eligible`** iff all of `research_pass` holds AND:
 
 - Data quality is `pit_safe`, **or** the profile uses a directly-traded
-  instrument (SPY / QQQ / BTCUSDT / ETHUSDT) where constituent survivorship
-  is N/A (snapshot/vendor limitations still disclosed).
+  instrument (SPY / QQQ / BTCUSDT / ETHUSDT and similar) where
+  `constituent_survivorship_applicable: false` (snapshot/vendor limitations
+  still disclosed).
 - Bootstrap lower-bound Sharpe `≥ 1.0` (high-confidence tier) is the minimum;
   `≥ 1.5` (exceptional / production-grade) requires data quality also eligible
   AND no other "exceptional" claim is invalidated.
 - All §6.3 failure categories are negative for this candidate.
 
-**If 0 candidates pass `research_pass`, that is the result.** The
-reframe from §4 stands.
+#### Status: `paper_trade_candidate`
+
+A candidate is **`paper_trade_candidate`** iff all of `promotion_eligible`
+holds AND:
+
+- **Permanent-holdout evaluation completed** (one-shot, never repeated).
+  The holdout result reproduces the development-window-and-validation
+  picture within tolerance: net Sharpe ≥ 1.0 on holdout (the holdout bar is
+  slightly lower than the dev bar to account for shrinkage), DSR ≥ 0.5 on
+  holdout, max drawdown ≥ −25 %.
+- **Cost-stress robustness on holdout** (positive net Sharpe at 2× costs
+  applied to holdout returns).
+- **No `holdout_failure` failure-class entry** in §6.3 taxonomy.
+- **Risk limits and kill-switch infrastructure** verified runnable for this
+  candidate (see §0 non-negotiable #11).
+- **Audit log + reproducibility check** complete: the candidate's full
+  artifact set (registry entry, manifests, hashes, run metadata) is
+  re-loadable byte-for-byte from cold start.
+- Reporting language: this candidate may be called "paper-trade ready";
+  cannot be called "live-trade ready" or "production-deployed".
+
+#### Status: `production_candidate`
+
+A candidate is **`production_candidate`** iff all of `paper_trade_candidate`
+holds AND:
+
+- **Paper-trade window completed** (separate from the backtest holdout) with
+  performance consistent with backtest within tolerance. The duration of
+  the paper-trade window is set per profile and asset class; for daily-bar
+  equity it is typically ≥ 3 months.
+- **Monitored shadow deployment completed**: the candidate ran in live
+  shadow mode (no real orders) against live market data for a defined
+  window with monitoring, alerting, and reconciliation against the model's
+  expected behaviour.
+- **Operational reviews passed**: documented review of risk limits, kill
+  switch, exposure caps, drawdown control, audit-log completeness, and
+  failure-alert routing.
+- **Legal / regulatory / licensing / compliance review completed** if the
+  candidate will manage external capital or advise external users.
+- Reporting language: this candidate may be called "production-ready" but
+  must still carry the disclaimer that all live deployment is subject to
+  operator approval and the kill-switch protocols.
+
+**Status promotion is sequential.** No candidate moves from `research_pass`
+to `paper_trade_candidate` without passing `promotion_eligible`; no candidate
+moves from `promotion_eligible` to `production_candidate` without passing
+`paper_trade_candidate`. Skipping stages is forbidden per §0 non-negotiable
+#10.
+
+**If 0 candidates pass `research_pass`, that is the result.** The reframe
+from §4 stands. Higher tiers are even stricter — most runs will end at
+`research_pass` or below.
 
 ### 6.2 Three-tier reporting
 
@@ -939,8 +1061,9 @@ reframe from §4 stands.
 Per-strategy line includes (per amendment §4.8): raw Sharpe, net Sharpe, DSR,
 `pbo_raw_global`, `pbo_profile`, `pbo_family`, bootstrap Sharpe CI, max DD,
 Calmar, annualised return, turnover, trade count, active-day count, cost
-sensitivity, cluster ID, family, regime-agnostic-or-specific flag,
-research_pass / promotion_eligible status.
+sensitivity, cluster ID, family, regime-agnostic-or-specific flag, and the
+**status-tier achieved** (one of: `none` / `research_pass` /
+`promotion_eligible` / `paper_trade_candidate` / `production_candidate`).
 
 **B. Per-profile report** (`reports/signal_research/profile/<profile>.md`).
 For `sp500`, `nasdaq`, `crypto`, `futures_proxy`. The **Nasdaq** profile is
@@ -991,8 +1114,13 @@ after each filter:
 | After regime + concentration checks | … |
 | **Final `research_pass` count** | … |
 | **Final `promotion_eligible` count** | … |
+| **Final `paper_trade_candidate` count** | … (after one-shot holdout) |
+| **Final `production_candidate` count** | … (after paper trade + shadow deployment + reviews; typically 0 in any single benchmark run) |
 
-This makes the multiple-testing burden visible at a glance.
+This makes the multiple-testing burden visible at a glance. The lower
+status tiers are expected to be sparse; `production_candidate` is typically
+zero in any single benchmark run because it requires processes that occur
+outside the benchmark itself.
 
 ### 6.5 Implementation milestones (dependency-ordered)
 
@@ -1001,7 +1129,7 @@ Per amendment §6.11, M6 is split into M6a (FinBERT) and M6b (Reality Check)
 
 | # | Milestone | Deliverable | Compute (non-binding) |
 |---|---|---|---|
-| **M1** | **Data + registry foundation** | Long-history loaders (yfinance 2005-current), HF / FRED / CBOE / crypto adapters with manifests, strategy registry schema (§3.6 — 14 fields), 4 model profiles (`signal_research_{sp500,nasdaq,crypto,futures_proxy}`), 4 Nasdaq universes (§2.3), minimal v1 crypto data (§6.6), 5-tier data-quality classifier with `public_snapshot_not_pit` and `directly_traded_etf` semantics | small |
+| **M1** | **Data + registry foundation** | Long-history loaders (yfinance 2005-current), HF / FRED / CBOE / crypto adapters with manifests, mandatory strategy registry schema (§3.6), 4 model profiles (`signal_research_{sp500,nasdaq,crypto,futures_proxy}`), 4 Nasdaq universes (§2.3), minimal v1 crypto data (§6.6), 5-tier data-quality classifier with `public_snapshot_not_pit` and the separate `constituent_survivorship_applicable` flag for directly-traded instruments | small |
 | **M2** | **Methodology stack** | CPCV (§4.1), meta-labeling with survivor-only pre-filter (§4.2), correlation dedup on net OOS returns (§4.3), multi-objective Pareto (§4.4), regime-conditional with agnostic/specific declaration (§4.5), block-bootstrap CIs (§4.6), three-tier PBO + DSR (§4.7), failure-classification taxonomy (§4.10), dev-only invariant (§4.9) | moderate |
 | **M3** | **Classical paper signals** | Triple-Barrier + meta-labeling wrapper (#3), Avellaneda-Lee with rolling PCA (§5.5), GKX-style OHLCV subset (§5.6), Vol Risk Premium as feature + tradable-only-if-real-instrument (#6), HMM regime feature (#7), Options-Implied features (#9) with `^VXN`-or-fallback, Macro Overlay features (#10) — runs entirely on classical models, no LSTM / Transformer | moderate |
 | **M4** | **Cross-sectional bridge to alpha_eq M4** | `signal_to_panel.py` (pure conversion + validation per §5.2), `panel_to_m4.py` (banner-preserving per §5.2), 10-point bridge test contract (§5.10), SP500 + NDX-100 cross-sectional runs of Avellaneda-Lee + GKX-style, PnL-based cross-sectional PBO (§5.8) | moderate-to-large |
@@ -1036,8 +1164,10 @@ report can make meaningful crypto claims:
 
 **PBO / DSR** identical to other profiles. Same `research_pass` /
 `promotion_eligible` gating. Crypto reports carry the
-`directly_traded_etf`-style `promotion_eligible` semantics (since BTC/ETH
-are directly tradable; vendor / snapshot limits still disclosed).
+**directly-traded-instrument** semantics (BTCUSDT and ETHUSDT are spot
+crypto pairs, not ETFs — `constituent_survivorship_applicable: false`
+applies because there are no constituents; vendor / snapshot limits still
+disclosed).
 
 ### 6.7 What this spec is NOT
 
@@ -1082,11 +1212,30 @@ sacrificed to estimates.
 
 ## 7. Disclaimer
 
-This spec is a research-and-engineering plan. Nothing produced from it
-constitutes investment advice. The strict backtest engine (via the M4
-cross-sectional bridge) reduces the gap between reported and realised
-performance but does not guarantee it. Real trading additionally requires the
-S2 + S4 machinery in the existing specs, plus the operator-controlled
-`QUANTLAB_STAGE` and kill-switch protocols.
+This spec is a research-and-engineering plan for a **production-intended**
+quant research platform with hedge-fund-grade discipline, constrained by
+limited resources.
+
+Nothing produced from this spec, or from artifacts generated under it,
+automatically constitutes investment advice. The project is production-
+intended; **research artifacts produced from it are not automatically
+investment advice**.
+
+**Before any output of this system is used to advise external users or
+manage capital, legal, regulatory, licensing, and compliance review is
+required.** This applies to:
+- Hosting model outputs in any consumer- or client-facing product.
+- Sending live orders to a broker on behalf of the operator or any third
+  party.
+- Publishing strategy performance claims to external audiences.
+- Marketing, soliciting, or accepting capital under management.
+
+The strict backtest engine (via the M4 cross-sectional bridge) reduces the
+gap between reported and realised performance but does not guarantee it.
+Real trading additionally requires the S2 (LLM governor) + S4 (execution,
+risk, promotion gates) machinery in the existing specs, plus the
+operator-controlled `QUANTLAB_STAGE` and kill-switch protocols. Status
+elevation past `paper_trade_candidate` requires operator review under the
+staged-promotion protocol (§6.1, §0 non-negotiable #10).
 
 `not_investment_advice: true`
