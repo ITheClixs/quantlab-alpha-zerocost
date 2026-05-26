@@ -1,0 +1,21 @@
+profile: sp500
+asset_class: equity_index
+universes:
+  - name: sp500_current_constituents
+    description: Current S&P 500 list (current-only; survivorship_prototype_only)
+    data_quality_label: survivorship_prototype_only
+    constituent_survivorship_applicable: true
+    tickers_source: data/processed/signal_research/sp500/sp500_current.parquet
+  - name: spy_direct
+    description: SPY ETF directly traded
+    data_quality_label: public_snapshot_not_pit
+    constituent_survivorship_applicable: false
+    tickers: [SPY]
+
+benchmarks:
+  - SPY_buy_and_hold
+  - SP500_index_proxy
+
+cost_model:
+  commission_bps_one_way: 0.5
+  spread_bps_one_way: 1.0

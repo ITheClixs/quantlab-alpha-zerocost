@@ -1,0 +1,57 @@
+profile: nasdaq
+asset_class: equity_index
+universes:
+  - name: nasdaq_index_proxy
+    description: QQQ + ^IXIC + NQ=F (TQQQ/SQQQ diagnostic only)
+    data_quality_label: public_snapshot_not_pit
+    constituent_survivorship_applicable: false
+    tickers: [QQQ, "^IXIC", "NQ=F"]
+    diagnostic_only: [TQQQ, SQQQ]
+  - name: nasdaq_100_current
+    description: Current NDX-100 constituents — survivorship-warned
+    data_quality_label: survivorship_prototype_only
+    constituent_survivorship_applicable: true
+    tickers_source: data/processed/signal_research/nasdaq/nasdaq_100_current.parquet
+  - name: nasdaq_mega_cap_focus
+    description: Liquid Nasdaq-heavy mega-caps (reporting cohort, not primary universe)
+    data_quality_label: public_snapshot_not_pit
+    constituent_survivorship_applicable: false
+    tickers: [AAPL, MSFT, NVDA, AMZN, META, GOOGL, GOOG, TSLA, AVGO, COST,
+              NFLX, AMD, QCOM, ADBE, INTU, CSCO, PEP, AMAT, ARM, ASML]
+  - name: user_focus_tech
+    description: User-named focused tech cohort
+    data_quality_label: public_snapshot_not_pit
+    constituent_survivorship_applicable: false
+    tickers: [AAPL, ORCL, PYPL, INTC, META, TSLA, QCOM, PLTR, GOOGL, AVGO, ADBE, RKLB]
+
+benchmarks:
+  - QQQ_buy_and_hold
+  - SPY_buy_and_hold
+  - NDX100_current_equal_weight   # survivorship-warned in report
+  - QQQ_momentum_baseline
+  - QQQ_mean_reversion_baseline
+  - QQQ_vol_targeted_baseline
+
+# Nasdaq-specific extra features (broadcast to per-row panel)
+context_features:
+  - QQQ_log_return_1
+  - QQQ_log_return_5
+  - QQQ_log_return_20
+  - QQQ_log_return_60
+  - QQQ_log_return_120
+  - QQQ_realized_vol_20
+  - QQQ_minus_SPY_residual
+  - QQQ_SPY_rolling_beta_60
+  - QQQ_over_SPY_relative_strength_60
+  - VIX
+  - VVIX
+  - VXN                            # with fallback if VXN unavailable
+  - DGS10
+  - T10Y2Y
+  - USD_index_proxy
+  - SMH_momentum_60                # semiconductor proxy
+  - IGV_momentum_60                # software/cloud proxy
+
+cost_model:
+  commission_bps_one_way: 0.5
+  spread_bps_one_way: 1.0

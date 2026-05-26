@@ -146,3 +146,16 @@ backtest-s1-eq-audit:
 js-overlay-compare-s1-eq:
 	PYTHONPATH=src uv run python scripts/s1_eq_overlay_compare.py \
 		--config configs/backtest_eq.yaml
+
+# ----- signal_research -----
+
+fetch-signal-research-data:
+	PYTHONPATH=src uv run python scripts/fetch_signal_research_data.py \
+		--config configs/signal_research.yaml
+
+run-signal-research-benchmark:
+	PYTHONPATH=src uv run python scripts/run_signal_research_benchmark.py \
+		--config configs/signal_research.yaml
+
+signal-research-report:
+	PYTHONPATH=src uv run python scripts/signal_research_report.py

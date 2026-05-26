@@ -1,0 +1,18 @@
+profile: crypto
+asset_class: spot_crypto
+universes:
+  - name: crypto_minimal_v1
+    description: BTCUSDT + ETHUSDT daily (per spec §6.6)
+    data_quality_label: public_snapshot_not_pit
+    constituent_survivorship_applicable: false
+    tickers: [BTCUSDT, ETHUSDT]
+
+benchmarks:
+  - BTCUSDT_buy_and_hold
+  - ETHUSDT_buy_and_hold
+
+cost_model:
+  maker_bps: 1.0
+  taker_bps: 5.0
+  spread_bps_one_way: 3.0          # rough spot-crypto retail proxy
+  funding_payments: false          # v1 spot only

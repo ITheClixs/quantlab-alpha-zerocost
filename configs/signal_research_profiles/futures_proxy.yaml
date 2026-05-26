@@ -1,0 +1,16 @@
+profile: futures_proxy
+asset_class: equity_index_futures
+universes:
+  - name: futures_proxy_v1
+    description: ES=F + NQ=F front-month continuous (yfinance auto-roll)
+    data_quality_label: public_snapshot_not_pit
+    constituent_survivorship_applicable: false
+    tickers: ["ES=F", "NQ=F"]
+
+benchmarks:
+  - ES_F_buy_and_hold
+  - NQ_F_buy_and_hold
+
+cost_model:
+  commission_bps_one_way: 0.5
+  spread_bps_one_way: 0.5
