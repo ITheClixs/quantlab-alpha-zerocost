@@ -1,0 +1,104 @@
+"""Triple-Barrier + Meta-Labeling wrapper (López de Prado 2018).
+
+Spec §3.3 #3, §4.2:
+- vertical barrier ∈ {5, 10, 20, 40} predeclared
+- profit-stop barriers ±k·σ_20 with k ∈ {1.0, 1.5, 2.0} predeclared
+- side from primary; meta-labeler predicts trade-vs-flat (size)
+- secondary classifier: RandomForestClassifier
+- survivor-only — pre-filter via methodology.meta_labeling.check_eligibility
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+
+import numpy as np
+import polars as pl
+from numpy.typing import NDArray
+from sklearn.ensemble import RandomForestClassifier
+
+from quant_research_stack.signal_research.methodology.meta_labeling import (
+    MetaLabelingEligibility,
+)
+from quant_research_stack.signal_research.papers.base import Wrapper
+
+
+@dataclass(frozen=True)
+class TripleBarrierConfig:
+    vertical_barrier_days: int = 20
+    profit_take_multiplier: float = 1.5
+    stop_loss_multiplier: float = 1.5
+    vol_estimator_window: int = 20
+    seed: int = 42
+
+
+def label_triple_barrier(
+    *,
+    close: NDArray[np.float64],
+    positions: NDArray[np.float64],
+    cfg: TripleBarrierConfig,
+) -> NDArray[np.float64]:
+    """Per-event label ∈ {0, 1, nan}:
+    1 = primary trade profitable before barrier hit,
+    0 = stop-loss or vertical-barrier no-edge,
+    nan = no position / insufficient vol estimator.
+    """
+    T = close.size
+    log_ret = np.zeros(T, dtype=np.float64)
+    log_ret[1:] = np.log(close[1:] / close[:-1])
+    vol = np.full(T, np.nan, dtype=np.float64)
+    for t in range(cfg.vol_estimator_window, T):
+        vol[t] = float(np.std(log_ret[t - cfg.vol_estimator_window : t], ddof=1))
+    labels = np.full(T, np.nan, dtype=np.float64)
+    for t in range(T):
+        if positions[t] == 0 or np.isnan(vol[t]):
+            continue
+        side = float(np.sign(positions[t]))
+        pt = cfg.profit_take_multiplier * vol[t]
+        sl = -cfg.stop_loss_multiplier * vol[t]
+        cum = 0.0
+        hit: float = 0.0
+        for h in range(1, cfg.vertical_barrier_days + 1):
+            if t + h >= T:
+                break
+            cum += log_ret[t + h] * side
+            if cum >= pt:
+                hit = 1.0
+                break
+            if cum <= sl:
+                hit = 0.0
+                break
+        labels[t] = hit
+    return labels
+
+
+class TripleBarrierWrapper(Wrapper):
+    def __init__(
+        self, config: TripleBarrierConfig, eligibility: MetaLabelingEligibility
+    ) -> None:
+        if not eligibility.eligible:
+            raise RuntimeError(
+                f"primary signal not eligible for meta-labeling: "
+                f"{eligibility.rejection_reason}"
+            )
+        self.config = config
+        self._model: RandomForestClassifier | None = None
+
+    def train_secondary(
+        self,
+        *,
+        primary_positions: NDArray[np.float64],
+        closes: NDArray[np.float64],
+        features_at_event: NDArray[np.float64],
+    ) -> None:
+        labels = label_triple_barrier(
+            close=closes, positions=primary_positions, cfg=self.config
+        )
+        mask = ~np.isnan(labels)
+        self._model = RandomForestClassifier(
+            n_estimators=200, random_state=self.config.seed, n_jobs=-1
+        )
+        self._model.fit(features_at_event[mask], labels[mask].astype(int))
+
+    def apply(self, positions: pl.Series) -> pl.Series:
+        return positions
