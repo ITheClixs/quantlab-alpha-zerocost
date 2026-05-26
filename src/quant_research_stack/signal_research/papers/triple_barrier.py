@@ -94,11 +94,49 @@ class TripleBarrierWrapper(Wrapper):
         labels = label_triple_barrier(
             close=closes, positions=primary_positions, cfg=self.config
         )
+        self.fit_labeled_events(features_at_event=features_at_event, labels=labels)
+
+    def fit_labeled_events(
+        self,
+        *,
+        features_at_event: NDArray[np.float64],
+        labels: NDArray[np.float64],
+        n_estimators: int = 200,
+    ) -> None:
+        if features_at_event.shape[0] != labels.shape[0]:
+            raise ValueError(
+                f"feature rows ({features_at_event.shape[0]}) != label rows ({labels.shape[0]})"
+            )
         mask = ~np.isnan(labels)
+        if int(mask.sum()) < 2:
+            raise ValueError("at least two labeled events are required")
         self._model = RandomForestClassifier(
-            n_estimators=200, random_state=self.config.seed, n_jobs=-1
+            n_estimators=n_estimators, random_state=self.config.seed, n_jobs=-1
         )
         self._model.fit(features_at_event[mask], labels[mask].astype(int))
+
+    def predict_trade_probability(
+        self,
+        features_at_event: NDArray[np.float64],
+    ) -> NDArray[np.float64]:
+        if self._model is None:
+            raise RuntimeError("secondary model is not trained")
+        proba = self._model.predict_proba(features_at_event)
+        classes = self._model.classes_.astype(int)
+        if 1 in classes:
+            one_idx = int(np.where(classes == 1)[0][0])
+            return proba[:, one_idx].astype(np.float64)
+        return np.zeros(features_at_event.shape[0], dtype=np.float64)
+
+    def filter_positions(
+        self,
+        *,
+        primary_positions: NDArray[np.float64],
+        features_at_event: NDArray[np.float64],
+        probability_threshold: float,
+    ) -> NDArray[np.float64]:
+        probabilities = self.predict_trade_probability(features_at_event)
+        return np.where(probabilities >= probability_threshold, primary_positions, 0.0).astype(np.float64)
 
     def apply(self, positions: pl.Series) -> pl.Series:
         return positions
