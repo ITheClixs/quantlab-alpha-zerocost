@@ -59,7 +59,7 @@ def deduplicate(
     drawdown: NDArray[np.float64],
     config: DedupConfig,
 ) -> DedupResult:
-    signed = np.corrcoef(net_returns.T)
+    signed = np.atleast_2d(np.corrcoef(net_returns.T)).astype(np.float64)
     absolute = np.abs(signed)
     clusters = _cluster_from_abs_corr(absolute, config.absolute_correlation_threshold)
     n_clusters = int(clusters.max()) + 1 if clusters.size else 0
