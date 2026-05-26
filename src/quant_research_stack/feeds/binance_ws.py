@@ -9,6 +9,7 @@ from typing import Any
 
 import websockets
 
+from quant_research_stack.crypto_research.perps.events import normalize_book_ticker, normalize_depth_update
 from quant_research_stack.feeds.base import AsyncFeedBase, FeedConnectionError, exponential_backoff
 from quant_research_stack.feeds.market_types import Tick, TickSide, Venue
 
@@ -28,6 +29,14 @@ def parse_aggtrade_event(payload: dict, *, received_utc: datetime) -> Tick:
         side=side,
         sequence=int(payload["a"]),
     )
+
+
+def parse_book_ticker_event(payload: dict, *, received_utc: datetime) -> dict:
+    return normalize_book_ticker(payload, received_utc=received_utc)
+
+
+def parse_depth_update_event(payload: dict, *, received_utc: datetime) -> dict:
+    return normalize_depth_update(payload, received_utc=received_utc)
 
 
 @dataclass
