@@ -181,15 +181,16 @@ def _predict_fold(
     gross_return = meta_position * future_return
     round_trip_cost = 2.0 * config.cost_bps_one_way * 1e-4
     net_return = gross_return - np.where(meta_position != 0.0, round_trip_cost, 0.0)
-    return test.select(["date", "symbol", "primary_position", "future_return_horizon"]).with_columns(
+    return test.select(["date", "symbol", "primary_position", "future_return_horizon", "close"]).with_columns(
         [
+            pl.col("close").alias("entry_close_proxy"),
             pl.lit(fold).alias("fold"),
             pl.Series("meta_probability", probabilities),
             pl.Series("meta_position", meta_position),
             pl.Series("gross_return", gross_return),
             pl.Series("net_return", net_return),
         ]
-    )
+    ).drop("close")
 
 
 def _fold_metrics(preds: pl.DataFrame, *, fold: int, train: pl.DataFrame, test: pl.DataFrame) -> dict[str, Any]:
