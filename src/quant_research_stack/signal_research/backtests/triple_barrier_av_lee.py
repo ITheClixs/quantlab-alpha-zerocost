@@ -115,24 +115,27 @@ def _compute_meta_features(bars: pl.DataFrame) -> pl.DataFrame:
     return out
 
 
-def _feature_matrix(features: pl.DataFrame, symbol: str) -> tuple[NDArray[np.float64], pl.DataFrame]:
-    f = features.filter(pl.col("symbol") == symbol).sort("date")
-    cols = ["log_return", "ret_5", "ret_20", "vol_20", "vol_60", "drawdown_60"]
-    mat = f.select(cols).to_numpy().astype(np.float64)
-    return mat, f
+_FEAT_COLS: list[str] = [
+    "log_return",
+    "ret_5",
+    "ret_20",
+    "vol_20",
+    "vol_60",
+    "drawdown_60",
+    "primary_position",
+]
 
 
-def _train_meta_labeler_per_symbol(
+def _build_labeled_long_form(
     *,
     bars_with_features: pl.DataFrame,
     primary_positions_long: pl.DataFrame,
     spec: TBAvLeeSpec,
-    train_until: dt.date,
-) -> tuple[RandomForestClassifier, list[str]]:
-    """Train ONE secondary RF across all symbols using triple-barrier labels.
+) -> pl.DataFrame:
+    """Generate triple-barrier labels per-symbol and stack into one long-form table.
 
-    Spec §4.2: survivor-only pre-filter is enforced upstream of construction; here
-    we just generate labels via label_triple_barrier and fit.
+    Columns: date, symbol, label, log_return, ret_5, ret_20, vol_20, vol_60,
+    drawdown_60, primary_position. Rows with NaN label or feature dropped.
     """
     tb_cfg = TripleBarrierConfig(
         vertical_barrier_days=spec.vertical_barrier_days,
@@ -141,10 +144,8 @@ def _train_meta_labeler_per_symbol(
         vol_estimator_window=spec.vol_estimator_window,
         seed=spec.rf_seed,
     )
-    feat_cols = ["log_return", "ret_5", "ret_20", "vol_20", "vol_60", "drawdown_60", "primary_position"]
-    all_X: list[NDArray[np.float64]] = []
-    all_y: list[NDArray[np.float64]] = []
     symbols = sorted(set(primary_positions_long["symbol"].to_list()))
+    frames: list[pl.DataFrame] = []
     for sym in symbols:
         bars_s = bars_with_features.filter(pl.col("symbol") == sym).sort("date")
         pos_s = (
@@ -156,58 +157,143 @@ def _train_meta_labeler_per_symbol(
         joined = bars_s.join(pos_s, on="date", how="left").with_columns(
             pl.col("primary_position").fill_null(0.0)
         )
-        train = joined.filter(pl.col("date") <= train_until)
-        if train.height < spec.pca_window + spec.vertical_barrier_days + 50:
+        if joined.height < spec.pca_window + spec.vertical_barrier_days + 50:
             continue
-        closes = train["close"].to_numpy().astype(np.float64)
-        positions = train["primary_position"].to_numpy().astype(np.float64)
+        closes = joined["close"].to_numpy().astype(np.float64)
+        positions = joined["primary_position"].to_numpy().astype(np.float64)
         labels = label_triple_barrier(close=closes, positions=positions, cfg=tb_cfg)
-        X = train.select(feat_cols).to_numpy().astype(np.float64)
-        mask = ~np.isnan(labels) & ~np.isnan(X).any(axis=1)
-        if int(mask.sum()) < 50:
+        frame = joined.select(["date", "symbol", *_FEAT_COLS]).with_columns(
+            pl.Series("label", labels)
+        )
+        frames.append(frame)
+    if not frames:
+        raise RuntimeError("no symbols produced labeled events for meta-labeler")
+    long_form = pl.concat(frames, how="diagonal_relaxed")
+    return long_form.drop_nulls(subset=[*_FEAT_COLS, "label"])
+
+
+def _walk_forward_oos_predictions(
+    *,
+    labeled_long: pl.DataFrame,
+    spec: TBAvLeeSpec,
+    train_until: dt.date,
+    n_folds: int = 5,
+) -> tuple[pl.DataFrame, RandomForestClassifier]:
+    """Expanding-window walk-forward training within dev.
+
+    Returns (dev_oos_predictions, final_rf_for_holdout_application).
+    dev_oos_predictions: (date, symbol, p_meta_oos) for every dev date that
+    falls inside a test fold (~80% of dev — first fold is training-only).
+    Embargo between train and test = vertical_barrier_days + 5 to prevent
+    triple-barrier label horizon overlap.
+
+    final_rf: trained on the entire dev set, used to filter holdout positions
+    (genuinely out-of-sample because holdout dates > train_until).
+    """
+    dev = labeled_long.filter(pl.col("date") <= train_until).sort(["date", "symbol"])
+    dev_dates = sorted(set(dev["date"].to_list()))
+    if len(dev_dates) < n_folds * (spec.vertical_barrier_days + 10):
+        raise RuntimeError(
+            f"dev period too short for {n_folds}-fold walk-forward "
+            f"({len(dev_dates)} days)"
+        )
+    fold_size = len(dev_dates) // (n_folds + 1)
+    embargo = spec.vertical_barrier_days + 5
+
+    oos_rows: list[pl.DataFrame] = []
+    for k in range(n_folds):
+        test_start_idx = (k + 1) * fold_size
+        test_end_idx = (k + 2) * fold_size if k < n_folds - 1 else len(dev_dates)
+        test_dates = dev_dates[test_start_idx:test_end_idx]
+        if not test_dates:
             continue
-        all_X.append(X[mask])
-        all_y.append(labels[mask].astype(int))
-    if not all_X:
-        raise RuntimeError("no symbols produced enough labeled events for meta-labeler")
-    X_train = np.vstack(all_X)
-    y_train = np.concatenate(all_y)
-    model = RandomForestClassifier(
+        train_until_k = test_dates[0] - dt.timedelta(days=embargo)
+        train = dev.filter(pl.col("date") <= train_until_k)
+        test = dev.filter(
+            (pl.col("date") >= test_dates[0]) & (pl.col("date") <= test_dates[-1])
+        )
+        if train.height < 200 or test.height < 5:
+            continue
+        X_train = train.select(_FEAT_COLS).to_numpy().astype(np.float64)
+        y_train = train["label"].to_numpy().astype(int)
+        model_k = RandomForestClassifier(
+            n_estimators=max(50, spec.rf_n_estimators // 2),
+            random_state=spec.rf_seed + k,
+            n_jobs=-1,
+        )
+        model_k.fit(X_train, y_train)
+        X_test = test.select(_FEAT_COLS).to_numpy().astype(np.float64)
+        proba = model_k.predict_proba(X_test)
+        classes = model_k.classes_.astype(int)
+        if 1 in classes:
+            one_idx = int(np.where(classes == 1)[0][0])
+            p1 = proba[:, one_idx].astype(np.float64)
+        else:
+            p1 = np.zeros(X_test.shape[0], dtype=np.float64)
+        oos_rows.append(
+            test.select(["date", "symbol"]).with_columns(pl.Series("p_meta_oos", p1))
+        )
+
+    if not oos_rows:
+        raise RuntimeError("walk-forward produced no OOS predictions")
+    dev_oos = pl.concat(oos_rows, how="diagonal_relaxed")
+
+    # Final RF on full dev — used only for holdout application
+    X_full = dev.select(_FEAT_COLS).to_numpy().astype(np.float64)
+    y_full = dev["label"].to_numpy().astype(int)
+    final_rf = RandomForestClassifier(
         n_estimators=spec.rf_n_estimators, random_state=spec.rf_seed, n_jobs=-1
     )
-    model.fit(X_train, y_train)
-    return model, feat_cols
+    final_rf.fit(X_full, y_full)
+    return dev_oos, final_rf
 
 
-def _apply_meta_labeling(
+def _apply_meta_labeling_walk_forward(
     *,
     bars_with_features: pl.DataFrame,
     primary_positions_long: pl.DataFrame,
-    model: RandomForestClassifier,
-    feat_cols: list[str],
+    dev_oos: pl.DataFrame,
+    final_rf: RandomForestClassifier,
+    train_until: dt.date,
     threshold: float,
 ) -> pl.DataFrame:
-    """Returns (date, symbol, y_xs_pred) with positions zeroed when prob < threshold."""
+    """Combine OOS predictions (dev) and final-RF predictions (holdout) into one
+    filtered position panel (date, symbol, y_xs_pred).
+    """
     sorted_p = primary_positions_long.sort(["symbol", "date"]).rename(
         {"y_xs_pred": "primary_position"}
     )
-    joined = bars_with_features.join(sorted_p, on=["date", "symbol"], how="left").with_columns(
-        pl.col("primary_position").fill_null(0.0)
-    )
-    X = joined.select(feat_cols).to_numpy().astype(np.float64)
-    nan_mask = np.isnan(X).any(axis=1)
-    X_filled = np.where(np.isnan(X), 0.0, X)
-    probas = model.predict_proba(X_filled)
-    classes = model.classes_.astype(int)
+    joined = bars_with_features.join(
+        sorted_p, on=["date", "symbol"], how="left"
+    ).with_columns(pl.col("primary_position").fill_null(0.0))
+
+    # Dev rows: use OOS predictions; rows not covered by any fold get p=0 (neutral skip)
+    dev_mask = joined["date"].to_numpy() <= np.datetime64(train_until)
+    joined_with_oos = joined.join(
+        dev_oos, on=["date", "symbol"], how="left"
+    ).with_columns(pl.col("p_meta_oos").fill_null(0.0))
+
+    # Holdout rows: apply the final RF
+    X_full = joined_with_oos.select(_FEAT_COLS).to_numpy().astype(np.float64)
+    nan_mask = np.isnan(X_full).any(axis=1)
+    X_filled = np.where(np.isnan(X_full), 0.0, X_full)
+    proba_holdout = final_rf.predict_proba(X_filled)
+    classes = final_rf.classes_.astype(int)
     if 1 in classes:
         one_idx = int(np.where(classes == 1)[0][0])
-        p1 = probas[:, one_idx].astype(np.float64)
+        p_holdout = proba_holdout[:, one_idx].astype(np.float64)
     else:
-        p1 = np.zeros(X.shape[0], dtype=np.float64)
-    p1[nan_mask] = 0.0
-    keep = (p1 >= threshold).astype(np.float64)
-    filtered = joined["primary_position"].to_numpy().astype(np.float64) * keep
-    return joined.with_columns(pl.Series("y_xs_pred", filtered)).select(
+        p_holdout = np.zeros(X_full.shape[0], dtype=np.float64)
+    p_holdout[nan_mask] = 0.0
+
+    p_meta = np.where(
+        dev_mask,
+        joined_with_oos["p_meta_oos"].to_numpy().astype(np.float64),
+        p_holdout,
+    )
+    keep = (p_meta >= threshold).astype(np.float64)
+    filtered = joined_with_oos["primary_position"].to_numpy().astype(np.float64) * keep
+    return joined_with_oos.with_columns(pl.Series("y_xs_pred", filtered)).select(
         ["date", "symbol", "y_xs_pred"]
     )
 
@@ -336,19 +422,27 @@ def run_triple_barrier_av_lee(
 
     funnel.record("after_primary_signal", int(av_predictions["symbol"].n_unique()))
 
-    model, feat_cols = _train_meta_labeler_per_symbol(
+    labeled_long = _build_labeled_long_form(
         bars_with_features=bars_with_features,
         primary_positions_long=av_predictions,
         spec=spec,
-        train_until=spec.dev_end,
     )
-    funnel.record("after_meta_labeler_trained", 1)
+    funnel.record("after_labels_generated", int(labeled_long.height))
 
-    filtered_signals = _apply_meta_labeling(
+    dev_oos, final_rf = _walk_forward_oos_predictions(
+        labeled_long=labeled_long,
+        spec=spec,
+        train_until=spec.dev_end,
+        n_folds=5,
+    )
+    funnel.record("after_walk_forward_oos_dev", int(dev_oos.height))
+
+    filtered_signals = _apply_meta_labeling_walk_forward(
         bars_with_features=bars_with_features,
         primary_positions_long=av_predictions,
-        model=model,
-        feat_cols=feat_cols,
+        dev_oos=dev_oos,
+        final_rf=final_rf,
+        train_until=spec.dev_end,
         threshold=spec.rf_threshold,
     )
 

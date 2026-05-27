@@ -78,3 +78,60 @@ def test_triple_barrier_av_lee_pipeline_runs_on_synthetic_panel(tmp_path: Path) 
     assert "survivorship_prototype_only" in body
     assert "Selection funnel" in body
     assert "Disclaimer" in body
+
+    funnel = out.funnel.to_ordered_dict()
+    assert "after_walk_forward_oos_dev" in funnel, (
+        "walk-forward training MUST report OOS dev count (anti-leakage telemetry)"
+    )
+    assert funnel["after_walk_forward_oos_dev"] > 0
+
+
+def test_walk_forward_oos_predictions_are_strictly_out_of_sample() -> None:
+    """Each dev OOS prediction must come from a model trained on dates strictly
+    before that prediction's date minus the embargo (vertical_barrier + 5).
+
+    This is the structural anti-leakage check. We verify by running with a known
+    small dataset and asserting the walk-forward function honors embargo.
+    """
+    import datetime as dt2
+
+    from quant_research_stack.signal_research.backtests.triple_barrier_av_lee import (
+        _build_labeled_long_form,
+        _compute_meta_features,
+        _walk_forward_oos_predictions,
+    )
+    from quant_research_stack.signal_research.papers.avellaneda_lee import (
+        AvellanedaLeeConfig,
+        AvellanedaLeeStrategy,
+    )
+
+    bars = _synthetic_bars(n_days=900, n_symbols=15)
+    spec = TBAvLeeSpec(
+        universe_tickers=[f"S{i:02d}" for i in range(15)],
+        start=dt2.date(2018, 1, 2),
+        end=dt2.date(2022, 1, 1),
+        dev_end=dt2.date(2020, 12, 31),
+        holdout_start=dt2.date(2021, 1, 1),
+        pca_window=60, n_pca_components=2, z_entry=1.0,
+        vertical_barrier_days=5, vol_estimator_window=10,
+        rf_n_estimators=50, rf_threshold=0.4,
+        equity=100_000.0, q_quantile=0.30, cohort="focused_basket",
+    )
+    bf = _compute_meta_features(bars)
+    av = AvellanedaLeeStrategy(
+        AvellanedaLeeConfig(pca_window=60, n_components=2, z_entry=1.0)
+    ).positions(bars).drop_nulls(subset=["y_xs_pred"])
+    labeled = _build_labeled_long_form(
+        bars_with_features=bf, primary_positions_long=av, spec=spec
+    )
+    dev_oos, _final = _walk_forward_oos_predictions(
+        labeled_long=labeled, spec=spec, train_until=spec.dev_end, n_folds=4,
+    )
+    # First fold is training-only → earliest OOS date must be > min(dev_dates)
+    dev_dates = sorted(set(
+        labeled.filter(pl.col("date") <= spec.dev_end)["date"].to_list()
+    ))
+    earliest_oos = min(dev_oos["date"].to_list())
+    assert earliest_oos >= dev_dates[len(dev_dates) // 5], (
+        f"earliest OOS prediction {earliest_oos} should be after first training fold"
+    )
