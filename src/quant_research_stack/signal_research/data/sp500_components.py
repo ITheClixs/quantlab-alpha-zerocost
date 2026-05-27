@@ -20,9 +20,26 @@ from quant_research_stack.signal_research.data.manifest import (
 
 
 def _fetch_from_wikipedia() -> pl.DataFrame:
-    """Parse the current SP500 list from Wikipedia (cached upstream by yfinance/pandas)."""
+    """Parse the current SP500 list from Wikipedia.
+
+    Wikipedia blocks the default urllib User-Agent (HTTP 403), so we fetch the
+    HTML via requests with a browser-style UA and hand the string to pandas.
+    """
+    import io
+
+    import requests
+
     url = "https://en.wikipedia.org/wiki/List_of_S%26P_500_companies"
-    tables = pd.read_html(url)
+    headers = {
+        "User-Agent": (
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 13_5) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/120.0.0.0 Safari/537.36"
+        )
+    }
+    resp = requests.get(url, headers=headers, timeout=30)
+    resp.raise_for_status()
+    tables = pd.read_html(io.StringIO(resp.text))
     df = tables[0]
     df = df.rename(columns={"Symbol": "symbol", "Security": "name", "GICS Sector": "sector"})
     return pl.from_pandas(df[["symbol", "name", "sector"]])
