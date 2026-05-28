@@ -1,0 +1,17 @@
+{
+  "target_symbol": "SPY",
+  "pbo_raw_global": 0.0,
+  "pbo_per_family": {
+    "baseline": 0.0,
+    "vrp_variant": 0.0891996891996892
+  },
+  "best_name": "hmm_only_gate",
+  "best_dsr": 0.9999576996741214,
+  "best_psr_zero": 0.9999999995657922,
+  "n_strategies": 9,
+  "decision": "FAIL \u2014 best VRP dev Sharpe +0.898 < 1.5.",
+  "failure_class": "no_alpha_at_threshold",
+  "failure_mode_1_concentration": false,
+  "failure_mode_2_pbo": false,
+  "failure_mode_3_dsr": false
+}
