@@ -1,11 +1,11 @@
 # Single-Index Risk-Timing Exception Proposal
 
 **Date:** 2026-05-28
-**Status:** DRAFT — policy proposal, pending acceptance
+**Status:** **ACCEPTED** (with seven amendments) — see §11 Acceptance Record
 **Type:** Governance / intake-protocol amendment
 **Author:** QuantLab research
 **Supersedes:** none
-**Amends (proposed):** `docs/research/STRATEGY_INTAKE.md` §3 ("Information source declaration")
+**Amends:** `docs/research/STRATEGY_INTAKE.md` §3 ("Information source declaration")
 
 ## 0. One-paragraph summary
 
@@ -29,15 +29,35 @@ production claim.
 This exception applies ONLY to strategies satisfying every condition
 below:
 
-**Allowed instruments (closed list):**
+**Allowed instruments — tiered list (amendment 6, 2026-05-28):**
+
+**Tier 1 (immediately eligible at exception acceptance):**
 
 - `SPY` — S&P 500 SPDR ETF, directly traded
 - `QQQ` — Nasdaq-100 Invesco ETF, directly traded
-- `BTCUSDT` — Bitcoin perpetual or spot on a venue with explicit fee/spread spec
-- `ETHUSDT` — Ethereum perpetual or spot on a venue with explicit fee/spread spec
-- `NQ` / `ES` futures continuous contracts (proxy roll handling required, see §4.8)
-  — added to the allowed list only after the futures data loader and cost
-  model pass a separate audit; not eligible at exception-acceptance time
+
+These have clean yfinance bars, well-understood cost structure, no
+constituent-survivorship issue, and no roll convention. They are
+immediately eligible for an exception-path validation under §3 / §4.
+
+**Tier 2 (eligible only after a separate market-specific audit):**
+
+- `BTCUSDT` — Bitcoin perpetual or spot, blocked pending: (a) venue
+  selection with documented fee schedule and observable spread series,
+  (b) funding-rate handling spec if perp, (c) data-quality audit of the
+  bars feed, (d) session-time convention. The yfinance `BTC-USD` proxy
+  used in the crypto top-30 iteration is **not** sufficient for Tier-2
+  qualification — that feed lacks venue-specific cost detail.
+- `ETHUSDT` — same conditions as BTCUSDT.
+- `ES` / `NQ` continuous futures — blocked pending: (a) roll convention
+  (calendar vs open-interest) audit, (b) roll-cost model with documented
+  assumptions, (c) margining and overnight financing spec, (d) data feed
+  with continuous-contract construction documented in the manifest.
+
+Tier-2 instruments are **not eligible at exception-acceptance time**.
+A separate proposal must follow that completes the market-specific
+audit before a Tier-2 instrument is added. Until then, no exception-
+path validation may be initiated for them.
 
 **Strategy shape (all required):**
 
@@ -183,8 +203,12 @@ mandatory baselines listed in §4.
 3.8. **One-bar AND two-bar** delay stress: net Sharpe degradation ≤ 0.5
 under both 1-bar and 2-bar delay. (The default rule tests 1-bar only.)
 
-3.9. Maximum dev drawdown ≤ **−20%**, OR Calmar ratio > **1.0** if
-drawdown exceeds −20%.
+3.9. Maximum dev drawdown ≥ **−20%** (i.e. no worse than −20%, where
+drawdown is reported as a negative percentage and the inequality is
+read on the signed value), OR Calmar ratio > **1.0** if max drawdown
+is worse than −20%. (Amendment 1, 2026-05-28: inequality direction
+fixed — a −30% drawdown is worse than −20% and must not pass under
+the first branch of this gate.)
 
 **Concentration / regime gates:**
 
@@ -203,10 +227,16 @@ remains ≥ 0.8).
 3.14. Strategy survives **removal of 2022** (Sharpe excluding 2022
 remains ≥ 0.8).
 
-3.15. Strategy survives **removal of the holdout window in dev** (Sharpe
-on the pre-2020 dev subsample remains ≥ 0.8). This guards against the
-"strategy works only in the recent regime that overlaps with the
-holdout-rationale" failure mode.
+3.15. Strategy survives the **pre-2020 development subsample**, with
+Sharpe ≥ **0.8** on that subsample alone. (Amendment 4, 2026-05-28:
+re-worded for clarity. The original phrasing "removal of the holdout
+window in dev" was conceptually confusing because the holdout is not
+part of dev. The intent is to verify the strategy worked before the
+2020-2025 high-vol-then-rally period, not only during it. The 0.8
+threshold is materially below the dev gate of 1.5 because pre-2020
+spans the post-2008 low-vol regime where any timing strategy will see
+its weakest contribution; we still require it to be net-positive and
+clear of noise.)
 
 **Baseline-domination gates:**
 
@@ -238,6 +268,14 @@ holdout metrics invalidates the run.
 
 3.24. Live paper trading required before any production claim (see §5).
 
+3.25. **Cash-leg robustness (amendment 5, 2026-05-28).** For long-or-cash
+strategies (the typical exception-path shape — long the instrument when
+the gate is on, otherwise sit in cash), §4.14 requires reporting under
+three cash-leg assumptions. Under the **conservative after-fee cash
+return** assumption, the strategy must still clear §3.3 (net Sharpe
+≥ 1.5 on both dev and holdout). A strategy whose pass depends on
+generous cash-return assumptions does not clear §3.
+
 ## 4. Additional robustness tests required before approval
 
 For an HMM-class strategy specifically, the following must be reported
@@ -266,10 +304,32 @@ state count.
 4.4. **HMM fit-window scheme.** Test expanding-window vs rolling-window
 fitting as separate registered variants. Same PBO requirement.
 
-4.5. **State-label stability.** Report the rate of state-label flipping
-across overlapping training windows. A regime-classifier whose risk-on
-state ID changes between fits is unreliable. Report transition matrix
-stability across training windows.
+4.5. **Economic state identity, not raw label stability (amendment 3,
+2026-05-28).** HMM state labels (state 0 vs state 1) are arbitrary
+permutations of the same fit. The economic identity of each state is
+what matters. The proposal therefore requires, in this order:
+
+  (a) **Predeclared risk-on identification rule.** Risk-on must be
+  defined by state statistics, not by raw state ID. Default rule: the
+  state with higher mean return on the dev fit window, with tie-broken
+  by lower realized volatility (state with smaller σ wins on near-tie
+  means within 0.0001 daily). Submissions may propose a different
+  predeclared rule with justification, but the rule must be stated
+  ex-ante and applied consistently across every refit.
+
+  (b) **Economic-identity stability across refits.** Report whether
+  successive refits produce states whose (mean, vol) signature places
+  them in the same economic identity, regardless of raw label index.
+  A "flip" for the purposes of §5.2 reversal triggers and §5.3 refit
+  policy means the *economic interpretation* flipped (e.g. the
+  previously-higher-mean state now has lower mean than its
+  counterpart). A flip of raw label index 0↔1 with both states
+  preserving their economic ordering is NOT a flip.
+
+  (c) **Transition matrix stability.** Report the transition matrix
+  for each refit, with state identity normalized via (a). Stability of
+  the P(stay) entries across refits is a quality indicator; bands
+  shifting by > 0.15 absolute on the diagonal are a quality warning.
 
 4.6. **Transition probabilities and state persistence.** For the
 chosen HMM, report the transition matrix and the expected duration of
@@ -310,6 +370,35 @@ allowed list.
 BTCUSDT/ETHUSDT).** Document the venue spec, the assumed funding
 schedule for perps (if applicable), and the impact on net Sharpe.
 
+4.14. **Cash-leg reporting (amendment 5, 2026-05-28).** For long-or-
+cash strategies, the report must include Sharpe, max drawdown, and
+cumulative return under three explicit cash-leg assumptions:
+
+  (a) **Zero cash return.** Risk-off days earn 0%. Conservative; used
+  as a stress floor.
+  (b) **T-bill / cash proxy return.** Risk-off days earn the prevailing
+  short-rate (3-month T-bill or equivalent currency cash rate). Use
+  the FRED series `DTB3` or equivalent; document the series ID and
+  carry forward / interpolation rule for non-trading days.
+  (c) **Conservative after-fee cash return.** T-bill rate minus an
+  explicit prime-broker/cash-sweep fee assumption (default: 25 bps
+  annualized; document if different). This is the realistic figure
+  for actual deployment.
+
+The §3.25 gate is evaluated against assumption (c). Assumptions (a)
+and (b) are reported for transparency. A strategy whose Sharpe is
+above the gate under (a) and (b) but fails under (c) is recorded as
+"cash-return-dependent" and does not clear §3.
+
+4.15. **Tier-1-only at exception acceptance (amendment 6, 2026-05-28).**
+Sections 4.1, 4.12, and 4.13 reference Tier-2 instruments (BTCUSDT,
+ETHUSDT, ES/NQ futures). Until Tier-2 audits per §1 are completed,
+the §4.1 cross-instrument robustness check is run on **SPY and QQQ
+only**. A strategy that works on SPY but fails on QQQ is suspect;
+both Tier-1 instruments must be reported. Tier-2 cross-instrument
+reporting becomes required only after each instrument's audit is
+accepted.
+
 ## 5. Governance rule
 
 ### 5.1 Sequencing
@@ -333,9 +422,48 @@ automatically promoted. The workflow is:
    of out-of-sample paper trading with daily PnL recorded in the
    audit log. Real-time data, real-time signal computation, real
    execution venue conditions (but no real capital).
-7. **If paper trading reproduces holdout Sharpe within ±0.5 over the
-   6-month window:** the strategy becomes eligible for review for
-   `production_candidate` status.
+7. **Structural-break check at end of paper-trading window
+   (amendment 2, 2026-05-28).** The previous version of this step
+   required "paper trading reproduces holdout Sharpe within ±0.5
+   over the 6-month window". That hard rule is replaced because a
+   6-month Sharpe estimate has standard error too large to make ±0.5
+   the right gate — under a true Sharpe of 1.5, the 6-month sample
+   Sharpe routinely lands in [0.3, 2.7] from sampling variance alone.
+   The replacement check is a **structural-break review** with the
+   following components, none of which is by itself a hard fail but
+   their *collective* pattern decides reviewer acceptance:
+
+   (i) Realized 6-month Sharpe is reported. No hard threshold; it is
+   context, not a gate.
+
+   (ii) Realized max drawdown is **within the expected envelope**
+   (no larger than the worst dev drawdown × 1.5).
+
+   (iii) Realized exposure-time fraction is **within expected bands**
+   (within ±15 percentage points of dev exposure-time).
+
+   (iv) Realized turnover and cost drag are **within expected bands**
+   (within ±50% of dev turnover; within ±25 bps annualized of dev
+   cost drag).
+
+   (v) No data-quality failures recorded in the audit log (missing
+   bars, stale signal, late market open handling).
+
+   (vi) No unexplained execution drift (the difference between
+   intended position and actual paper-trading position must stay
+   within ±0.05 of gross exposure on > 95% of trading sessions).
+
+   (vii) Realized HMM state distribution is consistent with backtest
+   expectation (each state's empirical frequency within ±10
+   percentage points of dev frequency, with state identity computed
+   per §4.5).
+
+   The reviewer evaluates this pattern. If (ii)-(vii) are all clear
+   and (i) is not catastrophically below the backtested figure
+   (informal floor: realized Sharpe > 0 over the window), the
+   strategy is eligible for the §5.1 step-8 review. If any of
+   (ii)-(vii) shows a clear break, the strategy is demoted and a
+   review note is filed.
 8. **Two-person review for production_candidate** per existing CLAUDE.md
    §11. Operator restart, .env update, signed stage_change.md per
    existing runbook.
@@ -344,20 +472,36 @@ automatically promoted. The workflow is:
 
 If at any time during paper trading or production:
 
-- Realized Sharpe falls below 0.5 over a trailing 6-month window
 - A single drawdown exceeds the worst dev drawdown by > 50%
-- The HMM produces a state-label flip relative to the deployed fit
+- The HMM **economic state identity flips** between successive refits
+  (per §4.5(b) — not a raw-label flip, but the previously-higher-mean
+  state now has lower mean than its counterpart, or the predeclared
+  risk-on rule places risk-on on a different economic identity than
+  before)
 - Any data-quality issue is discovered in the input feed
+- Structural-break check (per §5.1 step 7 components (ii)-(vii)) fires
 
 then the strategy is automatically demoted to `research_pass` and a
 review note is filed. No automatic re-promotion.
+
+(Amendment 3, 2026-05-28: the original trigger "the HMM produces a
+state-label flip relative to the deployed fit" was replaced with the
+economic-identity flip rule per §4.5. Raw-label permutations between
+fits are noise and must not cause demotion.)
+
+(Amendment 2, 2026-05-28: the original trigger "Realized Sharpe falls
+below 0.5 over a trailing 6-month window" was removed; 6-month Sharpe
+sampling variance makes that an unreliable trigger. The structural-
+break check (component (i) reporting Sharpe but not gating on it) is
+the replacement.)
 
 ### 5.3 Periodic refit policy
 
 The HMM must be refit at least every 12 months. The refit uses the
 expanded dev window (original dev + new data through refit date,
-excluding the original holdout). State-label stability across the
-refit is logged. If labels flip, the strategy is automatically demoted
+excluding the original holdout). **Economic-identity stability**
+(per §4.5(b)) is logged at every refit. If the economic interpretation
+flips — not merely raw labels — the strategy is automatically demoted
 pending review.
 
 ## 6. Status labels
@@ -437,6 +581,23 @@ suggests the exception was a mistake (e.g. multiple exception-path
 strategies fail in paper trading), the proposal can be revoked and
 existing exception-path strategies are demoted to `research_pass`.
 
+7.10. **Tax treatment is outside this proposal's scope (amendment 7,
+2026-05-28).** All §3 gates and §4 robustness tests are computed on
+pre-tax returns. Tax treatment — short-term vs long-term capital
+gains, wash-sale rules, K-1 vs 1099 reporting, withholding for
+non-resident accounts, and any jurisdiction-specific obligation —
+is **not** part of this validation gate and is **not** considered by
+the §5 governance workflow. Tax treatment must be reviewed
+separately before any user-facing communication, any client-facing
+advice, or any deployment of real capital. A strategy that clears
+§3 and §5 has cleared the *backtest-validation* bar; it has not
+cleared the *productization* bar. The productization review covers
+tax treatment, custody and execution venue selection, regulatory
+filing obligations, KYC/AML where applicable, and any other items
+outside the scope of this proposal. Productization review is a
+prerequisite for any communication or deployment that could
+implicate user-facing or capital-deployment claims.
+
 ## 8. Reviewer checklist
 
 Before accepting this proposal, the reviewer should confirm:
@@ -477,6 +638,41 @@ If the reviewer rejects this proposal:
 - The next alpha-search direction continues from §B of the
   negative-result research note (FinBERT sentiment / microstructure /
   cross-asset / event-conditioned)
+
+## 11. Acceptance Record
+
+**Status:** ACCEPTED, 2026-05-28.
+
+The proposal was accepted in direction with the following seven
+amendments. Each amendment is referenced inline in the section where
+it applies. The amendments are recorded here as a unified change log
+for audit purposes.
+
+| # | Section(s) amended | Summary |
+|---|---|---|
+| 1 | §3.9 | Max-drawdown inequality direction corrected: max drawdown ≥ −20% (no worse than −20%), not ≤ −20%. A −30% drawdown now correctly fails the first branch of the gate. |
+| 2 | §5.1 step 7, §5.2 | Replaced the 6-month paper-trading "Sharpe within ±0.5" hard rule with a structural-break review (7 components: realized Sharpe reported; drawdown envelope; exposure time; turnover/cost drag; data-quality; execution drift; state distribution). Reason: 6-month Sharpe sampling variance is too wide for ±0.5 to be a sound gate. |
+| 3 | §4.5, §5.2, §5.3 | HMM state-label flips are arbitrary permutations and must not cause demotion. "Flip" redefined to mean *economic-identity* flip per a predeclared risk-on rule (state with higher mean return on dev, tie-broken by lower vol). Refit policy and reversal triggers updated accordingly. |
+| 4 | §3.15 | Re-worded "removal of the holdout window in dev" — conceptually confusing because holdout is not part of dev. Replaced with: strategy survives the pre-2020 development subsample, Sharpe ≥ 0.8. |
+| 5 | §3.25 (new), §4.14 (new) | Cash-leg treatment added. For long-or-cash strategies, results must be reported under three explicit cash assumptions: zero cash return; T-bill / cash proxy return (FRED `DTB3` or equivalent); conservative after-fee cash return (T-bill minus 25 bps prime-broker fee default). §3 gate is evaluated against the conservative after-fee assumption. |
+| 6 | §1 (restructured), §4.15 (new) | Allowed instruments split into Tier 1 (SPY, QQQ — immediately eligible) and Tier 2 (BTCUSDT, ETHUSDT, ES/NQ futures — eligible only after separate market-specific loader, venue, funding, roll, and cost audits). yfinance `BTC-USD` proxy explicitly disqualified from Tier-2 status. |
+| 7 | §7.10 (new) | Productization limitation: tax treatment is outside the §3/§4 validation gate. Tax, custody, execution venue selection, regulatory filing, and KYC/AML must be reviewed separately before any user-facing communication or real-capital deployment. Backtest-validation pass ≠ productization pass. |
+
+**Effect of acceptance:**
+
+Acceptance of this policy does **not** promote HMM. Acceptance permits
+a dedicated HMM single-index validation run to be initiated under the
+amended §3 gates and §4 robustness tests, on Tier-1 instruments (SPY,
+QQQ) only.
+
+The HMM intake will be drafted as a separate document at
+`docs/research/intake/YYYY-MM-DD-hmm-single-index-v1.md` referencing
+this exception by path.
+
+Code changes per §9 of the original proposal (the `exception_invoked`
+flag in the validation pipeline, the `exception_review_required`
+status value, and the §4 robustness-test harness) remain TODO and are
+out of scope of this acceptance — they will accompany the HMM intake.
 
 ## References
 
