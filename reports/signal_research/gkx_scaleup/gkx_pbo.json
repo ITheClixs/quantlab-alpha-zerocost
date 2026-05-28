@@ -1,0 +1,17 @@
+{
+  "pbo_raw_global": 0.2655011655011655,
+  "pbo_per_profile": {
+    "top100": 0.21157731157731158,
+    "top200": 0.4722610722610723
+  },
+  "pbo_per_family": {
+    "baseline": 7.77000777000777e-05,
+    "gkx": 0.7931623931623931
+  },
+  "best_index": 8,
+  "best_dsr": 2.311732417475091e-43,
+  "best_psr_zero": 0.7327795407429771,
+  "n_strategies": 12,
+  "decision": "FAIL \u2014 PBO=0.266 > 0.25 (overfit variant grid).",
+  "failure_class": "overfit_parameter_grid"
+}
