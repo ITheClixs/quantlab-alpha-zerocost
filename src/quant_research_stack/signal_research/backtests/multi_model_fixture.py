@@ -86,6 +86,8 @@ class ModelResult:
     cost_stress_metrics: dict[str, float]
     funnel: SelectionFunnel
     research_pass: bool
+    dev_net_returns: NDArray[np.float64] | None = None
+    holdout_net_returns: NDArray[np.float64] | None = None
 
 
 def _bootstrap_ci(rets: NDArray[np.float64], *, seed: int) -> tuple[float, float]:
@@ -102,7 +104,13 @@ def _run_backtest_phases(
     panel: pl.DataFrame,
     spec: FixtureSpec,
     seed: int,
-) -> tuple[dict[str, float], dict[str, float], dict[str, float]]:
+) -> tuple[
+    dict[str, float],
+    dict[str, float],
+    dict[str, float],
+    NDArray[np.float64],
+    NDArray[np.float64],
+]:
     dev_panel = panel.filter(pl.col("execution_date") <= spec.dev_end)
     hd_panel = panel.filter(pl.col("execution_date") >= spec.holdout_start)
     cfg_normal = build_backtest_config(
@@ -138,7 +146,9 @@ def _run_backtest_phases(
         )
         dev_m["bootstrap_sharpe_lower_95"] = lo
         dev_m["bootstrap_sharpe_upper_95"] = hi
-    return dev_m, hd_m, cs_m
+    dev_rets = dev_res.daily_returns["net_return"].to_numpy().astype(np.float64)
+    hd_rets = hd_res.daily_returns["net_return"].to_numpy().astype(np.float64)
+    return dev_m, hd_m, cs_m, dev_rets, hd_rets
 
 
 def _signals_raw_avellaneda_lee(
@@ -422,7 +432,9 @@ def _run_single_model(
     )
     funnel.record("universe_used_in_m4", int(panel["symbol"].n_unique()))
 
-    dev_m, hd_m, cs_m = _run_backtest_phases(panel=panel, spec=spec, seed=seed)
+    dev_m, hd_m, cs_m, dev_rets, hd_rets = _run_backtest_phases(
+        panel=panel, spec=spec, seed=seed,
+    )
     funnel.record("dev_sharpe_positive", 1 if dev_m["sharpe"] > 0 else 0)
     funnel.record("holdout_sharpe_positive", 1 if hd_m["sharpe"] > 0 else 0)
     funnel.record("cost_stress_sharpe_positive", 1 if cs_m["sharpe"] > 0 else 0)
@@ -443,6 +455,8 @@ def _run_single_model(
         cost_stress_metrics=cs_m,
         funnel=funnel,
         research_pass=research_pass,
+        dev_net_returns=dev_rets,
+        holdout_net_returns=hd_rets,
     )
 
 
@@ -503,6 +517,16 @@ def run_all_models_on_fixture(
     # tb_meta_av_lee: delegate to the existing walk-forward orchestrator
     tb_spec = _tb_avl_to_fixture(spec)
     tb_out = run_triple_barrier_av_lee(bars=bars, spec=tb_spec, sectors=sectors)
+    tb_dev_rets = (
+        tb_out.baseline_daily["dev"]["net_return"].to_numpy().astype(np.float64)
+        if "dev" in tb_out.baseline_daily
+        else None
+    )
+    tb_hd_rets = (
+        tb_out.baseline_daily["holdout"]["net_return"].to_numpy().astype(np.float64)
+        if "holdout" in tb_out.baseline_daily
+        else None
+    )
     results["triple_barrier_meta_av_lee"] = ModelResult(
         name="triple_barrier_meta_av_lee",
         dev_metrics=tb_out.dev_metrics,
@@ -510,8 +534,66 @@ def run_all_models_on_fixture(
         cost_stress_metrics=tb_out.cost_stress_metrics,
         funnel=tb_out.funnel,
         research_pass=tb_out.funnel.to_ordered_dict().get("research_pass", 0) == 1,
+        dev_net_returns=tb_dev_rets,
+        holdout_net_returns=tb_hd_rets,
     )
     return results
+
+
+@dataclass(frozen=True)
+class CrossStrategyMetrics:
+    pbo_raw_global: float
+    pbo_per_profile: dict[str, float]
+    pbo_per_family: dict[str, float]
+    best_name: str
+    best_dsr: float
+    best_psr_zero: float
+    n_strategies: int
+
+
+def cross_strategy_metrics(
+    results: dict[str, ModelResult],
+) -> CrossStrategyMetrics:
+    """Compute three-tier PBO + DSR across the model pool.
+
+    Requires every ModelResult to carry dev_net_returns; raises if any are
+    None (i.e. the caller didn't use _run_single_model to populate them).
+    """
+    from quant_research_stack.signal_research.methodology.pbo_extensions import (
+        compute_three_tier_pbo,
+    )
+    from quant_research_stack.strategy_benchmark.dsr import compute_dsr
+
+    names = list(results.keys())
+    series: list[NDArray[np.float64]] = []
+    for n in names:
+        r = results[n].dev_net_returns
+        if r is None:
+            raise RuntimeError(f"ModelResult {n!r} has no dev_net_returns")
+        series.append(r)
+    min_len = min(s.size for s in series)
+    dev_matrix = np.column_stack([s[-min_len:] for s in series])
+    family = np.array(names)
+    profile = np.array(["fixture" for _ in names])
+    pbo = compute_three_tier_pbo(
+        returns=dev_matrix, profile=profile, family=family, n_partitions=16
+    )
+    sharpes = np.array([results[n].dev_metrics["sharpe"] for n in names])
+    best_idx = int(np.argmax(sharpes))
+    dsr = compute_dsr(
+        returns=series[best_idx],
+        sharpe_estimates=sharpes.astype(np.float64),
+        selected_idx=best_idx,
+    )
+    return CrossStrategyMetrics(
+        pbo_raw_global=pbo.raw_global,
+        pbo_per_profile=pbo.per_profile,
+        pbo_per_family=pbo.per_family,
+        best_name=names[best_idx],
+        best_dsr=float(dsr.dsr),
+        best_psr_zero=float(dsr.psr_zero),
+        n_strategies=len(names),
+    )
 
 
 def render_comparison_report(
