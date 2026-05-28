@@ -1,0 +1,16 @@
+{
+  "pbo_raw_global": 0.013675213675213675,
+  "pbo_per_profile": {
+    "all_sectors": 0.013675213675213675
+  },
+  "pbo_per_family": {
+    "sanity": 0.7286713286713287,
+    "sector_avl": 0.053069153069153066
+  },
+  "best_index": 19,
+  "best_dsr": 1.0599865867896442e-35,
+  "best_psr_zero": 0.08865936701230331,
+  "n_strategies": 21,
+  "decision": "FAIL \u2014 best strategy is a sanity baseline, not AvL.",
+  "failure_class": "no_residual_meanreversion_edge"
+}
