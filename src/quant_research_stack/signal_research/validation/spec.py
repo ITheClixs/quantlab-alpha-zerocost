@@ -89,6 +89,67 @@ class ValidationSpec:
     intake_date: dt.date = field(default_factory=lambda: dt.date(1970, 1, 1))
     intake_doc_ref: str = ""
 
+    # Exception-path fields (single-index risk-timing exception policy)
+    # See docs/research/intake/2026-05-28-single-index-risk-timing-exception.md
+    # When exception_invoked=False, every default behavior is unchanged.
+    exception_invoked: bool = False
+    exception_policy_ref: str = ""
+    declared_instrument: str = ""  # Tier-1 instrument for exception path
+    single_instrument_scalar: bool = False  # required True for exception path
+    feature_audit: tuple[str, ...] = ()  # honest declaration of features used
+
     @property
     def declares_non_ohlcv_source(self) -> bool:
         return any(s != InformationSource.OHLCV for s in self.information_sources)
+
+
+# Accepted exception policy reference (commit 74ca502, 2026-05-28).
+# A spec must match this exact string in exception_policy_ref to be eligible
+# for the exception path.
+ACCEPTED_EXCEPTION_POLICY_REF: str = (
+    "docs/research/intake/2026-05-28-single-index-risk-timing-exception.md"
+)
+
+# Tier-1 allowed instruments (per accepted exception policy §1, amendment 6).
+# Tier-2 instruments (BTCUSDT, ETHUSDT, ES, NQ) are NOT yet eligible.
+TIER_1_INSTRUMENTS: frozenset[str] = frozenset({"SPY", "QQQ"})
+
+# Forbidden feature substrings — any feature in spec.feature_audit whose
+# lower-cased name contains one of these tokens triggers a hard fail under
+# the exception path. The intent: the exception path is OHLCV-only on the
+# instrument's own bars; any feature that hints at off-OHLCV information
+# is rejected at validation time.
+EXCEPTION_FORBIDDEN_FEATURE_TOKENS: tuple[str, ...] = (
+    "vix",
+    "vrp",
+    "vvix",
+    "skew",
+    "vxn",
+    "implied",
+    "macro",
+    "rates",
+    "yield",
+    "sentiment",
+    "finbert",
+    "news",
+    "earnings",
+    "fundamental",
+    "cross_asset",
+    "microstructure",
+    "tick",
+    "book",
+    "fomc",
+    "cpi",
+    "event_window",
+    "calendar",
+)
+
+
+def feature_audit_violation(feature_audit: tuple[str, ...]) -> str | None:
+    """Return the first forbidden token found, or None if all features are OK."""
+    for feature in feature_audit:
+        lower = feature.lower()
+        for token in EXCEPTION_FORBIDDEN_FEATURE_TOKENS:
+            if token in lower:
+                return f"feature {feature!r} contains forbidden token {token!r}"
+    return None

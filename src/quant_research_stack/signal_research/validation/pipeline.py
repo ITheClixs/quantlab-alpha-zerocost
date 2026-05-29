@@ -60,7 +60,12 @@ from quant_research_stack.signal_research.validation.sanity import (
     inverted_signal,
     random_signal,
 )
-from quant_research_stack.signal_research.validation.spec import ValidationSpec
+from quant_research_stack.signal_research.validation.spec import (
+    ACCEPTED_EXCEPTION_POLICY_REF,
+    TIER_1_INSTRUMENTS,
+    ValidationSpec,
+    feature_audit_violation,
+)
 from quant_research_stack.strategy_benchmark.dsr import compute_dsr
 
 SignalFn = Callable[[pl.DataFrame, ValidationSpec], pl.DataFrame]
@@ -162,6 +167,30 @@ def _classify_failures(
     return cats
 
 
+def _exception_path_qualifies(spec: ValidationSpec) -> tuple[bool, str]:
+    """Return (qualifies, reason). The exception path is restrictive and a
+    failure in any precondition falls back to the default rule.
+    """
+    if not spec.exception_invoked:
+        return False, "exception_invoked is False"
+    if spec.exception_policy_ref != ACCEPTED_EXCEPTION_POLICY_REF:
+        return False, (
+            f"exception_policy_ref does not match the accepted policy "
+            f"({spec.exception_policy_ref!r})"
+        )
+    if spec.declared_instrument not in TIER_1_INSTRUMENTS:
+        return False, (
+            f"declared_instrument {spec.declared_instrument!r} is not Tier-1 "
+            f"(allowed: {sorted(TIER_1_INSTRUMENTS)})"
+        )
+    if not spec.single_instrument_scalar:
+        return False, "single_instrument_scalar must be True for exception path"
+    violation = feature_audit_violation(spec.feature_audit)
+    if violation is not None:
+        return False, violation
+    return True, ""
+
+
 def _assign_status(
     *,
     spec: ValidationSpec,
@@ -169,6 +198,22 @@ def _assign_status(
     pbo: float,
     dsr: float,
 ) -> tuple[CandidateStatus, bool]:
+    # Exception-path branch — only activates when ALL preconditions match.
+    # Any failure falls through to the default rule.
+    exception_qualifies, _exc_reason = _exception_path_qualifies(spec)
+    if exception_qualifies:
+        if result.failure_classes:
+            return CandidateStatus.NONE, False
+        if (
+            result.dev_metrics["sharpe"] >= spec.gate_dev_sharpe_min
+            and result.holdout_metrics["sharpe"] >= spec.gate_holdout_sharpe_min
+            and pbo <= spec.gate_pbo_max
+            and dsr >= spec.gate_dsr_min
+        ):
+            return CandidateStatus.EXCEPTION_REVIEW_REQUIRED, False
+        return CandidateStatus.RESEARCH_PASS, False
+
+    # Default rule (unchanged from prior behavior).
     if not spec.declares_non_ohlcv_source:
         # "No promotion without new information source" rule.
         # OHLCV-only strategies can be RESEARCH_PASS but never beyond.
