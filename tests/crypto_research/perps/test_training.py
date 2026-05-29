@@ -72,6 +72,23 @@ def test_perp_walk_forward_respects_embargo_rows() -> None:
     assert fold["test_start_row"] - fold["train_end_row"] == 3
 
 
+def test_perp_walk_forward_excludes_forward_looking_label_features() -> None:
+    # build_l1_features emits mid_direction_up_{h} (future_mid > mid); it must never
+    # enter the feature matrix or it leaks the target.
+    frame = _feature_frame().with_columns(
+        pl.Series("mid_direction_up_5", [int(i % 2) for i in range(160)]),
+        pl.Series("future_taker_long_return_5", [0.0001 for _ in range(160)]),
+    )
+    result = train_perp_walk_forward(
+        frame,
+        config=PerpWalkForwardConfig(
+            target_column="future_mid_return_5", min_train_rows=60, test_rows=25, max_folds=1
+        ),
+    )
+    assert "mid_direction_up_5" not in result.feature_columns
+    assert all(not col.startswith("future_") for col in result.feature_columns)
+
+
 def test_perp_walk_forward_rejects_missing_target() -> None:
     frame = _feature_frame().drop("future_mid_return_5")
 

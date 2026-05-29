@@ -125,6 +125,27 @@ The honest prior (§5) is that the net result will fail the cost gate; the value
 of the run is to document *whether and why* trade-flow differs from the depth
 signal, not to manufacture a pass.
 
+## Mode B addendum (2026-05-29) — L1 quotes on Binance bookTicker
+
+Ran first under **Mode B** (operator decision "B first, then A"): the finished
+`perps` L1-quote pipeline needs best bid/ask + sizes, which the audited aggTrades
+stream lacks. Mode B sources **Binance USDT-M futures bookTicker** archives
+(`data/futures/um/daily/bookTicker/BTCUSDT/`, free, streamed capped per day), so
+the declared information source for the Mode B run is **`microstructure_book`**
+(L1 top-of-book), not `microstructure_tick`. All §6 cost rules and §8 failure
+modes carry over unchanged. Mode A (aggressor-signed flow on aggTrades, the
+literal `microstructure_tick` channel) remains to be built next.
+
+**Mode B result (run `20260529-201427`, 6 days, 456k rows, walk-forward OOS):**
+gross signal is real (ridge IC ≈ 0.097, directional accuracy 79–90% on non-zero
+moves) but **untradable** — an edge-over-cost threshold sweep (k ∈ {none,1…4})
+shows gross markout collapsing to ≈0 as selectivity rises, and **net return is
+negative at every threshold** (best k=4: net −0.81%, 27 trades, net hit 0%).
+Fails the cost gate, 2× cost, and 1-event delay. Failure mode #1 (markout < cost)
+materialized exactly as pre-registered. `research_candidate=False`, hard-capped
+`research_only`. Confirms the order-book L2 benchmark's "predictive but
+untradable" finding on the L1-quote channel.
+
 ## What happens after this intake
 
 1. This document is committed to `docs/research/intake/`.

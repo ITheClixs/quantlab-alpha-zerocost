@@ -12,7 +12,9 @@ from sklearn.linear_model import Ridge
 from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import StandardScaler
 
-_EXCLUDED_FEATURE_PREFIXES = ("future_", "pred_")
+# "mid_direction_up_" is a forward-looking label emitted by build_l1_features
+# (future_mid > mid). It is NOT a feature; excluding it prevents target leakage.
+_EXCLUDED_FEATURE_PREFIXES = ("future_", "pred_", "mid_direction_up_")
 _EXCLUDED_FEATURE_COLUMNS = {
     "dataset_id",
     "source",
