@@ -1,7 +1,9 @@
 # Intake — Event-Conditioned Macro/Calendar v1
 
 **Date:** 2026-05-30
-**Status:** PRE-REGISTRATION (intake submitted; no backtest run yet)
+**Status:** CLOSED `research_only` — `already_subsumed_by_vol_or_regime`, no v2.
+See `docs/research/2026-05-NEGATIVE-RESULT-EVENT-MACRO-FOMC.md` and run `ca2d716`.
+(CPI/NFP families never run — deferred on data grounds.)
 **Strategy name:** `event_conditioned_macro_v1`
 **Proposer:** QuantLab research
 **Promotion intent:** `research_only` for v1 (see §9)
