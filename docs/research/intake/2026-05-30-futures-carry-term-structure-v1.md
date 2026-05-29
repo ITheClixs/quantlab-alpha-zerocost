@@ -1,7 +1,10 @@
 # Intake — Futures Carry / Term-Structure v1
 
 **Date:** 2026-05-30
-**Status:** PRE-REGISTRATION (intake submitted; **data audit first, no strategy code yet**)
+**Status:** CLOSED — **REJECT_ON_DATA** (operator decision 2026-05-30). Data audit
+returned PARTIAL_PASS (no `curve_clean` native market; proxies only); operator
+declined the proxy-only research run, so futures carry is closed on data grounds.
+No strategy code was written. See `reports/signal_research/futures_carry_v1/futures_data_audit.md`.
 **Strategy name:** `futures_carry_term_structure_v1`
 **Proposer:** QuantLab research
 **Promotion intent:** `research_only` for v1 (see §9)
