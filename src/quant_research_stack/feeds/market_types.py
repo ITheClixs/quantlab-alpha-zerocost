@@ -11,6 +11,7 @@ class Venue(StrEnum):
     binance = "binance"
     coinbase = "coinbase"
     alpaca = "alpaca"
+    massive = "massive"
     replay = "replay"
 
 

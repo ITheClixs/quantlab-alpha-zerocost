@@ -35,6 +35,11 @@ dependencies = [
     "tqdm>=4.66.0",
     "websockets>=12.0",
     "xgboost>=2.1.0",
+    "lxml>=6.1.1",
+    "html5lib>=1.1",
+    "beautifulsoup4>=4.14.3",
+    "boto3>=1.43.17",
+    "python-dotenv>=1.2.2",
 ]
 
 [project.optional-dependencies]
