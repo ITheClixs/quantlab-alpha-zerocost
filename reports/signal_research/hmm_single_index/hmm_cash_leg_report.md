@@ -1,0 +1,99 @@
+# HMM Single-Index v1 — Cash-Leg Report
+
+Per intake §8 / accepted exception policy §3.25, §4.14:
+
+Long-or-cash strategies must report under three cash assumptions.
+The §9 gate is evaluated against `conservative_after_fee` ONLY.
+
+| Variant | assumption | dev Sharpe | dev DD | holdout Sharpe | holdout DD |
+|---|---|---:|---:|---:|---:|
+| `hmm_2_full_dev_spy` | zero | +1.772 | -5.89% | +1.960 | -6.30% |
+| `hmm_2_full_dev_spy` | tbill | +1.772 | -5.89% | +1.960 | -6.30% |
+| `hmm_2_full_dev_spy` | conservative_after_fee | +1.772 | -5.89% | +1.960 | -6.30% |
+| `hmm_2_expanding_spy` | zero | +0.857 | -24.50% | +1.465 | -18.76% |
+| `hmm_2_expanding_spy` | tbill | +0.857 | -24.50% | +1.465 | -18.76% |
+| `hmm_2_expanding_spy` | conservative_after_fee | +0.857 | -24.50% | +1.465 | -18.76% |
+| `hmm_2_rolling_5y_spy` | zero | +1.090 | -17.35% | +1.465 | -18.76% |
+| `hmm_2_rolling_5y_spy` | tbill | +1.090 | -17.35% | +1.465 | -18.76% |
+| `hmm_2_rolling_5y_spy` | conservative_after_fee | +1.090 | -17.35% | +1.465 | -18.76% |
+| `hmm_3_full_dev_spy` | zero | +1.878 | -4.60% | +2.384 | -3.09% |
+| `hmm_3_full_dev_spy` | tbill | +1.878 | -4.60% | +2.384 | -3.09% |
+| `hmm_3_full_dev_spy` | conservative_after_fee | +1.878 | -4.60% | +2.384 | -3.09% |
+| `hmm_3_expanding_spy` | zero | +0.536 | -33.72% | +1.465 | -18.76% |
+| `hmm_3_expanding_spy` | tbill | +0.536 | -33.72% | +1.465 | -18.76% |
+| `hmm_3_expanding_spy` | conservative_after_fee | +0.536 | -33.72% | +1.465 | -18.76% |
+| `hmm_3_rolling_5y_spy` | zero | +0.641 | -19.71% | +1.465 | -18.76% |
+| `hmm_3_rolling_5y_spy` | tbill | +0.641 | -19.71% | +1.465 | -18.76% |
+| `hmm_3_rolling_5y_spy` | conservative_after_fee | +0.641 | -19.71% | +1.465 | -18.76% |
+| `hmm_4_full_dev_spy` | zero | +1.776 | -3.76% | +2.367 | -2.81% |
+| `hmm_4_full_dev_spy` | tbill | +1.776 | -3.76% | +2.367 | -2.81% |
+| `hmm_4_full_dev_spy` | conservative_after_fee | +1.776 | -3.76% | +2.367 | -2.81% |
+| `hmm_4_expanding_spy` | zero | +0.666 | -24.50% | +1.776 | -12.19% |
+| `hmm_4_expanding_spy` | tbill | +0.666 | -24.50% | +1.776 | -12.19% |
+| `hmm_4_expanding_spy` | conservative_after_fee | +0.666 | -24.50% | +1.776 | -12.19% |
+| `hmm_4_rolling_5y_spy` | zero | +0.718 | -18.61% | +1.465 | -18.76% |
+| `hmm_4_rolling_5y_spy` | tbill | +0.718 | -18.61% | +1.465 | -18.76% |
+| `hmm_4_rolling_5y_spy` | conservative_after_fee | +0.718 | -18.61% | +1.465 | -18.76% |
+| `hmm_2_full_dev_qqq` | zero | +1.810 | -7.69% | +1.939 | -6.15% |
+| `hmm_2_full_dev_qqq` | tbill | +1.810 | -7.69% | +1.939 | -6.15% |
+| `hmm_2_full_dev_qqq` | conservative_after_fee | +1.810 | -7.69% | +1.939 | -6.15% |
+| `hmm_2_expanding_qqq` | zero | +0.905 | -26.26% | +1.560 | -26.44% |
+| `hmm_2_expanding_qqq` | tbill | +0.905 | -26.26% | +1.560 | -26.44% |
+| `hmm_2_expanding_qqq` | conservative_after_fee | +0.905 | -26.26% | +1.560 | -26.44% |
+| `hmm_2_rolling_5y_qqq` | zero | +1.269 | -13.94% | +1.614 | -22.77% |
+| `hmm_2_rolling_5y_qqq` | tbill | +1.269 | -13.94% | +1.614 | -22.77% |
+| `hmm_2_rolling_5y_qqq` | conservative_after_fee | +1.269 | -13.94% | +1.614 | -22.77% |
+| `hmm_3_full_dev_qqq` | zero | +2.326 | -3.10% | +2.569 | -3.39% |
+| `hmm_3_full_dev_qqq` | tbill | +2.326 | -3.10% | +2.569 | -3.39% |
+| `hmm_3_full_dev_qqq` | conservative_after_fee | +2.326 | -3.10% | +2.569 | -3.39% |
+| `hmm_3_expanding_qqq` | zero | +0.765 | -35.12% | +2.002 | -11.96% |
+| `hmm_3_expanding_qqq` | tbill | +0.765 | -35.12% | +2.002 | -11.96% |
+| `hmm_3_expanding_qqq` | conservative_after_fee | +0.765 | -35.12% | +2.002 | -11.96% |
+| `hmm_3_rolling_5y_qqq` | zero | +0.708 | -25.18% | +1.614 | -22.77% |
+| `hmm_3_rolling_5y_qqq` | tbill | +0.708 | -25.18% | +1.614 | -22.77% |
+| `hmm_3_rolling_5y_qqq` | conservative_after_fee | +0.708 | -25.18% | +1.614 | -22.77% |
+| `hmm_4_full_dev_qqq` | zero | +2.356 | -3.09% | +2.621 | -2.94% |
+| `hmm_4_full_dev_qqq` | tbill | +2.356 | -3.09% | +2.621 | -2.94% |
+| `hmm_4_full_dev_qqq` | conservative_after_fee | +2.356 | -3.09% | +2.621 | -2.94% |
+| `hmm_4_expanding_qqq` | zero | +1.091 | -24.85% | +1.614 | -22.77% |
+| `hmm_4_expanding_qqq` | tbill | +1.091 | -24.85% | +1.614 | -22.77% |
+| `hmm_4_expanding_qqq` | conservative_after_fee | +1.091 | -24.85% | +1.614 | -22.77% |
+| `hmm_4_rolling_5y_qqq` | zero | +1.052 | -16.10% | +1.758 | -16.36% |
+| `hmm_4_rolling_5y_qqq` | tbill | +1.052 | -16.10% | +1.758 | -16.36% |
+| `hmm_4_rolling_5y_qqq` | conservative_after_fee | +1.052 | -16.10% | +1.758 | -16.36% |
+| `buy_and_hold_spy` | zero | +0.729 | -33.72% | +1.465 | -18.76% |
+| `buy_and_hold_spy` | tbill | +0.729 | -33.72% | +1.465 | -18.76% |
+| `buy_and_hold_spy` | conservative_after_fee | +0.729 | -33.72% | +1.465 | -18.76% |
+| `vol_targeted_buy_and_hold_spy` | zero | +0.828 | -14.70% | +1.365 | -11.01% |
+| `vol_targeted_buy_and_hold_spy` | tbill | +0.828 | -14.70% | +1.365 | -11.01% |
+| `vol_targeted_buy_and_hold_spy` | conservative_after_fee | +0.828 | -14.70% | +1.365 | -11.01% |
+| `sma_50_200_gate_spy` | zero | +0.621 | -33.72% | +1.164 | -18.76% |
+| `sma_50_200_gate_spy` | tbill | +0.621 | -33.72% | +1.164 | -18.76% |
+| `sma_50_200_gate_spy` | conservative_after_fee | +0.621 | -33.72% | +1.164 | -18.76% |
+| `mom_12_1_spy` | zero | +0.543 | -33.72% | +1.267 | -18.76% |
+| `mom_12_1_spy` | tbill | +0.543 | -33.72% | +1.267 | -18.76% |
+| `mom_12_1_spy` | conservative_after_fee | +0.543 | -33.72% | +1.267 | -18.76% |
+| `random_spy` | zero | +0.233 | -25.66% | +1.783 | -8.41% |
+| `random_spy` | tbill | +0.233 | -25.66% | +1.783 | -8.41% |
+| `random_spy` | conservative_after_fee | +0.233 | -25.66% | +1.783 | -8.41% |
+| `buy_and_hold_qqq` | zero | +0.797 | -35.12% | +1.614 | -22.77% |
+| `buy_and_hold_qqq` | tbill | +0.797 | -35.12% | +1.614 | -22.77% |
+| `buy_and_hold_qqq` | conservative_after_fee | +0.797 | -35.12% | +1.614 | -22.77% |
+| `vol_targeted_buy_and_hold_qqq` | zero | +0.934 | -15.05% | +1.532 | -10.53% |
+| `vol_targeted_buy_and_hold_qqq` | tbill | +0.934 | -15.05% | +1.532 | -10.53% |
+| `vol_targeted_buy_and_hold_qqq` | conservative_after_fee | +0.934 | -15.05% | +1.532 | -10.53% |
+| `sma_50_200_gate_qqq` | zero | +0.798 | -28.56% | +1.327 | -22.77% |
+| `sma_50_200_gate_qqq` | tbill | +0.798 | -28.56% | +1.327 | -22.77% |
+| `sma_50_200_gate_qqq` | conservative_after_fee | +0.798 | -28.56% | +1.327 | -22.77% |
+| `mom_12_1_qqq` | zero | +0.753 | -28.56% | +1.379 | -22.77% |
+| `mom_12_1_qqq` | tbill | +0.753 | -28.56% | +1.379 | -22.77% |
+| `mom_12_1_qqq` | conservative_after_fee | +0.753 | -28.56% | +1.379 | -22.77% |
+| `random_qqq` | zero | +0.375 | -30.38% | +1.412 | -13.92% |
+| `random_qqq` | tbill | +0.375 | -30.38% | +1.412 | -13.92% |
+| `random_qqq` | conservative_after_fee | +0.375 | -30.38% | +1.412 | -13.92% |
+| `inverted_of_best_hmm_spy` | zero | +0.027 | -38.43% | +0.239 | -19.04% |
+| `inverted_of_best_hmm_spy` | tbill | +0.027 | -38.43% | +0.239 | -19.04% |
+| `inverted_of_best_hmm_spy` | conservative_after_fee | +0.027 | -38.43% | +0.239 | -19.04% |
+| `inverted_of_best_hmm_qqq` | zero | +0.021 | -39.88% | +0.762 | -22.80% |
+| `inverted_of_best_hmm_qqq` | tbill | +0.021 | -39.88% | +0.762 | -22.80% |
+| `inverted_of_best_hmm_qqq` | conservative_after_fee | +0.021 | -39.88% | +0.762 | -22.80% |
