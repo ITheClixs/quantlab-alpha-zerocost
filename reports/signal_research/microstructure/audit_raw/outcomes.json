@@ -1,0 +1,230 @@
+[
+  {
+    "check_name": "timestamp_resolution_ms_2024-04-01",
+    "passed": true,
+    "value": 1,
+    "notes": "smallest positive inter-event interval in ms"
+  },
+  {
+    "check_name": "monotonicity_pct_2024-04-01",
+    "passed": true,
+    "value": 100.0,
+    "notes": "% of consecutive rows where t_i >= t_{i-1}"
+  },
+  {
+    "check_name": "duplicate_event_pct_2024-04-01",
+    "passed": true,
+    "value": 0.0,
+    "notes": "% of exact (agg_trade_id, timestamp_ms, price, qty) duplicates"
+  },
+  {
+    "check_name": "longest_gap_seconds_2024-04-01",
+    "passed": true,
+    "value": 3.974,
+    "notes": "longest inter-trade gap on the audited day"
+  },
+  {
+    "check_name": "timezone_utc_2024-04-01",
+    "passed": true,
+    "value": "UTC (Unix epoch ms)",
+    "notes": "Binance aggTrades timestamps are Unix ms by spec"
+  },
+  {
+    "check_name": "aggressor_flag_coverage_pct_2024-04-01",
+    "passed": true,
+    "value": 100.0,
+    "notes": "% of rows with is_buyer_maker not null"
+  },
+  {
+    "check_name": "zero_volume_pct_2024-04-01",
+    "passed": true,
+    "value": 0.0,
+    "notes": "% of rows with quantity <= 0"
+  },
+  {
+    "check_name": "zero_price_pct_2024-04-01",
+    "passed": true,
+    "value": 0.0,
+    "notes": "% of rows with price <= 0"
+  },
+  {
+    "check_name": "outlier_5sigma_pct_2024-04-01",
+    "passed": true,
+    "value": 0.0,
+    "notes": "% of trades > 5\u03c3 from 1-min rolling mean"
+  },
+  {
+    "check_name": "timestamp_resolution_ms_2024-08-05",
+    "passed": true,
+    "value": 1,
+    "notes": "smallest positive inter-event interval in ms"
+  },
+  {
+    "check_name": "monotonicity_pct_2024-08-05",
+    "passed": true,
+    "value": 100.0,
+    "notes": "% of consecutive rows where t_i >= t_{i-1}"
+  },
+  {
+    "check_name": "duplicate_event_pct_2024-08-05",
+    "passed": true,
+    "value": 0.0,
+    "notes": "% of exact (agg_trade_id, timestamp_ms, price, qty) duplicates"
+  },
+  {
+    "check_name": "longest_gap_seconds_2024-08-05",
+    "passed": true,
+    "value": 2.576,
+    "notes": "longest inter-trade gap on the audited day"
+  },
+  {
+    "check_name": "timezone_utc_2024-08-05",
+    "passed": true,
+    "value": "UTC (Unix epoch ms)",
+    "notes": "Binance aggTrades timestamps are Unix ms by spec"
+  },
+  {
+    "check_name": "aggressor_flag_coverage_pct_2024-08-05",
+    "passed": true,
+    "value": 100.0,
+    "notes": "% of rows with is_buyer_maker not null"
+  },
+  {
+    "check_name": "zero_volume_pct_2024-08-05",
+    "passed": true,
+    "value": 0.0,
+    "notes": "% of rows with quantity <= 0"
+  },
+  {
+    "check_name": "zero_price_pct_2024-08-05",
+    "passed": true,
+    "value": 0.0,
+    "notes": "% of rows with price <= 0"
+  },
+  {
+    "check_name": "outlier_5sigma_pct_2024-08-05",
+    "passed": true,
+    "value": 0.0,
+    "notes": "% of trades > 5\u03c3 from 1-min rolling mean"
+  },
+  {
+    "check_name": "timestamp_resolution_ms_2026-05-22",
+    "passed": true,
+    "value": 1,
+    "notes": "smallest positive inter-event interval in ms"
+  },
+  {
+    "check_name": "monotonicity_pct_2026-05-22",
+    "passed": true,
+    "value": 100.0,
+    "notes": "% of consecutive rows where t_i >= t_{i-1}"
+  },
+  {
+    "check_name": "duplicate_event_pct_2026-05-22",
+    "passed": true,
+    "value": 0.0,
+    "notes": "% of exact (agg_trade_id, timestamp_ms, price, qty) duplicates"
+  },
+  {
+    "check_name": "longest_gap_seconds_2026-05-22",
+    "passed": true,
+    "value": 9.359,
+    "notes": "longest inter-trade gap on the audited day"
+  },
+  {
+    "check_name": "timezone_utc_2026-05-22",
+    "passed": true,
+    "value": "UTC (Unix epoch ms)",
+    "notes": "Binance aggTrades timestamps are Unix ms by spec"
+  },
+  {
+    "check_name": "aggressor_flag_coverage_pct_2026-05-22",
+    "passed": true,
+    "value": 100.0,
+    "notes": "% of rows with is_buyer_maker not null"
+  },
+  {
+    "check_name": "zero_volume_pct_2026-05-22",
+    "passed": true,
+    "value": 0.0,
+    "notes": "% of rows with quantity <= 0"
+  },
+  {
+    "check_name": "zero_price_pct_2026-05-22",
+    "passed": true,
+    "value": 0.0,
+    "notes": "% of rows with price <= 0"
+  },
+  {
+    "check_name": "outlier_5sigma_pct_2026-05-22",
+    "passed": true,
+    "value": 0.004921179114515838,
+    "notes": "% of trades > 5\u03c3 from 1-min rolling mean"
+  },
+  {
+    "check_name": "depth_snapshot_accessible",
+    "passed": true,
+    "value": "bids=5000 asks=5000 lastUpdateId=94440504989",
+    "notes": "REST snapshot fetched successfully"
+  },
+  {
+    "check_name": "depth_has_sequence_id",
+    "passed": true,
+    "value": 94440504989,
+    "notes": "lastUpdateId enables snapshot/delta replay"
+  },
+  {
+    "check_name": "depth_bids_10_levels",
+    "passed": true,
+    "value": 5000,
+    "notes": "bid-side level count"
+  },
+  {
+    "check_name": "depth_asks_10_levels",
+    "passed": true,
+    "value": 5000,
+    "notes": "ask-side level count"
+  },
+  {
+    "check_name": "depth_crossed_book",
+    "passed": true,
+    "value": "best_bid=73703.86 best_ask=73703.87",
+    "notes": "best bid must be strictly < best ask"
+  },
+  {
+    "check_name": "book_ticker_accessible",
+    "passed": true,
+    "value": {
+      "symbol": "BTCUSDT",
+      "bidPrice": "73703.86000000",
+      "bidQty": "3.06594000",
+      "askPrice": "73703.87000000",
+      "askQty": "3.53628000"
+    },
+    "notes": "REST best-bid/ask fetched"
+  },
+  {
+    "check_name": "avg_rows_per_day",
+    "passed": true,
+    "value": 2480284.0,
+    "notes": "averaged across audited days"
+  },
+  {
+    "check_name": "projected_yearly_gb_compressed",
+    "passed": true,
+    "value": 50.58778412640095,
+    "notes": "rough estimate at 60 bytes/row in zstd parquet"
+  },
+  {
+    "check_name": "archive_2018_01_01_available",
+    "passed": true,
+    "value": "https://data.binance.vision/data/spot/daily/aggTrades/BTCUSDT/BTCUSDT-aggTrades-2018-01-01.zip",
+    "notes": "HEAD on data.binance.vision aggTrades archive"
+  },
+  {
+    "check_name": "archive_recent_30d_available",
+    "passed": true,
+    "value": "https://data.binance.vision/data/spot/daily/aggTrades/BTCUSDT/BTCUSDT-aggTrades-2026-04-29.zip",
+    "notes": "HEAD on recent aggTrades archive"
+  }
+]

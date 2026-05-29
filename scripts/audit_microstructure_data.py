@@ -64,6 +64,7 @@ class DaySummary:
     earliest_ts_ms: int
     latest_ts_ms: int
     duration_hours: float
+    timestamp_unit: str = "ms"  # "ms" or "us" — autodetected on load
 
 
 @dataclass(frozen=True)
@@ -116,7 +117,12 @@ def _agg_trades_url(*, symbol: str, day: dt.date) -> str:
 def _load_agg_trades_day(
     *, symbol: str, day: dt.date, raw_dir: Path,
 ) -> tuple[pl.DataFrame, DaySummary]:
-    """Download + unzip + parse one day of aggTrades."""
+    """Download + unzip + parse one day of aggTrades.
+
+    Auto-detects timestamp resolution (Binance changed from ms to µs
+    in 2024-2025 for some archives). If the raw values imply a year
+    after 2200, treat as µs and divide; otherwise treat as ms.
+    """
     url = _agg_trades_url(symbol=symbol, day=day)
     console.print(f"  fetching {url}")
     zip_bytes = _http_get(url, timeout=120)
@@ -129,14 +135,14 @@ def _load_agg_trades_day(
             csv_bytes = fp.read()
     # Binance aggTrades schema (no header in archive files):
     # agg_trade_id, price, quantity, first_trade_id, last_trade_id,
-    # timestamp_ms, is_buyer_maker, is_best_match
+    # timestamp, is_buyer_maker, is_best_match
     df = pl.read_csv(
         io.BytesIO(csv_bytes),
         has_header=False,
         new_columns=[
             "agg_trade_id", "price", "quantity",
             "first_trade_id", "last_trade_id",
-            "timestamp_ms", "is_buyer_maker", "is_best_match",
+            "timestamp_raw", "is_buyer_maker", "is_best_match",
         ],
         schema_overrides={
             "agg_trade_id": pl.Int64,
@@ -144,11 +150,22 @@ def _load_agg_trades_day(
             "quantity": pl.Float64,
             "first_trade_id": pl.Int64,
             "last_trade_id": pl.Int64,
-            "timestamp_ms": pl.Int64,
+            "timestamp_raw": pl.Int64,
             "is_buyer_maker": pl.Boolean,
             "is_best_match": pl.Boolean,
         },
     )
+    # Auto-detect ms vs µs. A ms timestamp for any year < 2200 is < 7.3e12;
+    # a µs timestamp for 2024+ is ~1.7e15. Threshold at 1e14 cleanly separates.
+    raw_max_arr = df["timestamp_raw"].to_numpy()
+    raw_max = int(raw_max_arr.max())
+    if raw_max > 1_000_000_000_000_000:  # > 1e15 → µs resolution
+        timestamp_unit = "us"
+        df = df.with_columns((pl.col("timestamp_raw") // 1000).alias("timestamp_ms"))
+    else:
+        timestamp_unit = "ms"
+        df = df.with_columns(pl.col("timestamp_raw").alias("timestamp_ms"))
+    console.print(f"    detected timestamp unit: {timestamp_unit}")
     ts_arr = df["timestamp_ms"].to_numpy()
     earliest_ts = int(ts_arr.min())
     latest_ts = int(ts_arr.max())
@@ -161,6 +178,7 @@ def _load_agg_trades_day(
         earliest_ts_ms=earliest_ts,
         latest_ts_ms=latest_ts,
         duration_hours=(latest_ts - earliest_ts) / (1000.0 * 3600.0),
+        timestamp_unit=timestamp_unit,
     )
     return df, summary
 
