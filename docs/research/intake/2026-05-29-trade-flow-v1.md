@@ -146,6 +146,28 @@ materialized exactly as pre-registered. `research_candidate=False`, hard-capped
 `research_only`. Confirms the order-book L2 benchmark's "predictive but
 untradable" finding on the L1-quote channel.
 
+## Mode A result (2026-05-29) — aggressor-signed flow on spot aggTrades
+
+Run `20260529-204946`, 6 days, 2.4M trades, walk-forward OOS (markout horizon 20
+events, modeled 1 bp half-spread). The trade-flow signal is **strongly
+predictive statistically** — ensemble IC **0.45**, zero-mean R² **+0.22**, 78%
+directional accuracy (far above Mode B's IC 0.015). But it is **even more
+untradable**: the edge-over-cost sweep makes **zero trades at k ≥ 1.5× cost** and
+−0.09% on the single k=1 trade — the predicted markouts are almost always smaller
+than the round-trip cost. The high IC is consistent with **bid-ask-bounce mean
+reversion** (mechanically real, uncapturable without crossing the spread), which
+the cost gate rejects by construction. Failure mode #1 (markout < cost) confirmed.
+`research_candidate=False`, hard-capped `research_only`. The literal
+`microstructure_tick` channel is now closed alongside Mode B.
+
+**Conclusion across the microstructure arc:** three independent channels — L2
+depth (order-book benchmark), L1 quotes (Mode B), and tick trade-flow (Mode A) —
+all show genuinely predictive short-horizon signals that die on realistic taker
+cost. The binding constraint is execution economics on free retail venues, not
+signal absence. Any tradable microstructure edge would require a maker/queue
+execution model and venue-level fee/rebate structure that free public data and a
+taker-cost model cannot represent.
+
 ## What happens after this intake
 
 1. This document is committed to `docs/research/intake/`.
