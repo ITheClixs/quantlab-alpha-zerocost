@@ -5,8 +5,9 @@ from pathlib import Path
 
 _spec = importlib.util.spec_from_file_location(
     "make_mvp_figures", Path(__file__).resolve().parents[1] / "scripts" / "make_mvp_figures.py")
+assert _spec is not None and _spec.loader is not None
 mmf = importlib.util.module_from_spec(_spec)
-_spec.loader.exec_module(mmf)  # type: ignore[union-attr]
+_spec.loader.exec_module(mmf)
 
 
 def test_s1_fold_model_r2_groups_by_model() -> None:

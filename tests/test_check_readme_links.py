@@ -5,8 +5,9 @@ from pathlib import Path
 
 _spec = importlib.util.spec_from_file_location(
     "check_readme_links", Path(__file__).resolve().parents[1] / "scripts" / "check_readme_links.py")
+assert _spec is not None and _spec.loader is not None
 crl = importlib.util.module_from_spec(_spec)
-_spec.loader.exec_module(crl)  # type: ignore[union-attr]
+_spec.loader.exec_module(crl)
 
 
 def test_extract_skips_http_and_anchors() -> None:
