@@ -159,3 +159,16 @@ run-signal-research-benchmark:
 
 signal-research-report:
 	PYTHONPATH=src uv run python scripts/signal_research_report.py
+
+.PHONY: mvp mvp-figures
+mvp-figures:
+	PYTHONPATH=src uv run python scripts/make_mvp_figures.py
+
+## mvp: regenerate the funding-carry capstone result + figures on cached free data
+mvp:
+	PYTHONPATH=src uv run python scripts/run_funding_carry_v1.py
+	PYTHONPATH=src uv run python scripts/run_funding_carry_realism.py
+	PYTHONPATH=src uv run python scripts/make_mvp_figures.py
+	@echo ""
+	@echo "MVP quickstart complete. Verdict: funding-carry = DO_NOT_ADVANCE (research_only)."
+	@echo "Figures: figures/*.png   Reports: reports/signal_research/funding_carry_v1/*.md"
