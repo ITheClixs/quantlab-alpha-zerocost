@@ -13,9 +13,13 @@ from __future__ import annotations
 import json
 import sys
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import numpy as np
 from numpy.typing import NDArray
+
+if TYPE_CHECKING:
+    from quant_research_stack.crypto_research.funding.carry import CarryResult
 
 S1_METRICS = Path("experiments/alpha_s1/20260523-160541/metrics.json")
 REALISM_MANIFEST = Path("manifests/funding_carry/funding_carry_realism_manifest.json")
@@ -53,7 +57,7 @@ def pooled_equity(net: NDArray[np.float64]) -> NDArray[np.float64]:
     return np.concatenate([[1.0], eq])
 
 
-def pooled_8h_carry():
+def pooled_8h_carry() -> "CarryResult":
     """Recompute the pooled BTC+ETH 8h-marked carry from cached free data.
 
     Mirrors scripts/run_funding_carry_realism.py (base costs 10/5/5 bps). Returns a
@@ -119,7 +123,7 @@ def plot_per_year(rows: list[tuple[int, float]], out: Path) -> None:
     ax.axhline(0, color="black", lw=0.8)
     ax.set_title("Funding carry: per-year net return (after cost, unlevered)")
     ax.set_ylabel("net return (%)")
-    ax.bar_label(bars, fmt="%.1f")
+    ax.bar_label(bars, fmt="%.1f%%")
     fig.tight_layout()
     fig.savefig(out, dpi=120)
     plt.close(fig)
