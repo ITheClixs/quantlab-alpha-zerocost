@@ -32,17 +32,24 @@ fills / funding / basis match our backtest cost-and-tail models.
 ```
 binance_ws (real public spot + perp mark + funding)
   -> FundingCarryStrategy (computes target delta-neutral book, emits OrderIntent deltas)
-  -> SignalIngestor (auto-approve verdict; see §5)
-  -> S4Loop (RiskGate -> Sizer)
+  -> CarryLoop (runner.py): apply risk.yaml caps + kill conditions directly
   -> NullBroker + FillModel (simulated fills)
   -> PositionBook  <- FundingAccrual (credits/debits short-perp at 00/08/16 UTC)
-  -> append-only JSONL audit ; KillSwitch arms the loop
+  -> append-only JSONL audit ; KillSwitchWatcher arms the loop
 ```
 
-Reused unchanged: `execution/loop.py` (`S4Loop`), `execution/signals.py`
-(`SignalIngestor`), `execution/{risk,position_book,audit,kill_switch,router,reconciliation}.py`,
-`brokers/{null_broker,fill_model,order_types,capabilities,base}.py`, `feeds/binance_ws.py`,
-`feeds/{recorder,replayer}.py`, `configs/risk.yaml`. New code is confined to §9.
+**Orchestration decision (operator-approved 2026-05-31):** do NOT reuse `S4Loop`. It is
+forecast-driven and single-leg — it ingests S1 prediction files + S2 verdicts and sizes
+one market order per ticket from `predicted_score`/`confidence` (`Sizer`/`RiskGate` are
+themselves coupled to the `ExecutionTicket(S1Signal + GovernorVerdict)` shape). A
+delta-neutral carry is a *target-position rule with two legs + 8h funding*, which that
+abstraction does not fit. Instead a small dedicated **CarryLoop** in `runner.py` reuses
+the safety-critical **components** directly.
+
+Reused as components (NOT `S4Loop`/`SignalIngestor`/`RiskGate`/`Sizer`):
+`brokers/{null_broker,fill_model,order_types,capabilities,base}.py`,
+`execution/{position_book,audit,kill_switch}.py`, `configs/risk.yaml` (caps as numbers),
+`feeds/binance_ws.py` + `feeds/{recorder,replayer}.py`. New code is confined to §9.
 
 ## 2. Market data — real Binance public mainnet (no API key)
 
@@ -70,16 +77,25 @@ At each 00/08/16 UTC settlement, `FundingAccrual` credits/debits the short-perp 
 rate** from §2, and writes a `funding_settled` audit row. This is the strategy's only P&L
 source besides basis drift and simulated cost.
 
-## 5. Execution wiring — reuse `S4Loop` + `NullBroker` + `FillModel`; S2 governor permissive
+## 5. Execution wiring — dedicated `CarryLoop` reusing S4 components (not `S4Loop`)
 
-`NullBroker` (`supports_shorting=True`) executes both legs in one simulated account.
-`FillModel` applies `half_spread_bps + slippage_bps` (configured to match the backtest's
-5/10 bps taker assumptions). **S2 governor runs in permissive/bypass mode:** the governor
-exists to veto LLM-originated / predicted trades that lack paper-citations (CLAUDE.md
-§11–12); a mechanical delta-neutral carry is not an originated forecast, so citation-gating
-is a category error. The `SignalIngestor` is fed an explicit auto-`approve` verdict per
-signal, recorded in the audit so the decision trail stays complete and honest. This bypass
-is a deliberate, documented scoping choice.
+`runner.py`'s `CarryLoop` orchestrates: pull the latest spot/perp/funding from the feed →
+`FundingCarryStrategy` computes the target book and rebalancing `OrderIntent` deltas →
+apply the `configs/risk.yaml` caps + kill conditions directly (a small in-loop guard) →
+`NullBroker.place_order` (simulated) → `PositionBook.apply_fill` (via `stream_fills`) →
+`FundingAccrual` at settlements → `AuditLog`.
+
+- `NullBroker` (`supports_shorting=True`) executes both legs in one simulated account;
+  `FillModel` applies `half_spread_bps + slippage_bps` configured to ~match the backtest's
+  5/10 bps taker assumptions.
+- Risk caps reused as numbers from `configs/risk.yaml` (per-symbol %, gross %, base
+  notional %, orders/minute) plus the drawdown + crypto feed-gap kill conditions — applied
+  by a small `CarryLoop` guard rather than via `RiskGate(ticket)` (which needs the forecast
+  ticket shape).
+- **No S2 governor in the loop.** The governor exists to veto LLM-originated/predicted
+  trades lacking paper-citations (CLAUDE.md §11–12); a mechanical delta-neutral carry never
+  enters that pipeline, so there is nothing to veto. The audit records the carry's
+  deterministic decisions directly. This is a deliberate, documented scoping choice.
 
 ## 6. Risk & safety
 
@@ -119,7 +135,8 @@ src/quant_research_stack/execution/paper_sim/
   __init__.py
   strategy.py          FundingCarryStrategy: target book -> OrderIntent deltas
   funding_accrual.py   FundingAccrual: 8h funding P&L on the short leg
-  runner.py            wires feed -> strategy -> SignalIngestor -> S4Loop -> NullBroker
+  runner.py            CarryLoop: feed -> strategy -> risk/kill guard -> NullBroker ->
+                       PositionBook -> FundingAccrual -> AuditLog (+ run modes)
   reconciliation.py    live-vs-model metrics + report (distinct from execution/reconciliation.py)
 scripts/run_funding_carry_paper.py   CLI entry (stage guard, kill arming, run modes)
 configs/paper_sim.yaml               notional, rebalance cadence, fill bps, symbols
