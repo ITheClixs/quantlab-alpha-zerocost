@@ -1,0 +1,140 @@
+{
+  "name": "zero_cost_data_manifest",
+  "built_utc": "2026-05-30T10:43:16.571480+00:00",
+  "verdict": "PASS_TIMESTAMP_SAFE",
+  "instruments": {
+    "SPY": {
+      "source": "disk",
+      "path": "data/processed/vrp/bars/SPY.parquet",
+      "available": true,
+      "rows": 4122,
+      "date_min": "2010-01-04",
+      "date_max": "2026-05-22"
+    },
+    "QQQ": {
+      "source": "disk",
+      "path": "data/processed/vrp/bars/QQQ.parquet",
+      "available": true,
+      "rows": 4122,
+      "date_min": "2010-01-04",
+      "date_max": "2026-05-22"
+    },
+    "BTCUSDT": {
+      "source": "yfinance",
+      "ticker": "BTC-USD",
+      "available": true,
+      "rows": 4274,
+      "date_min": "2014-09-17",
+      "date_max": "2026-05-30"
+    },
+    "ETHUSDT": {
+      "source": "yfinance",
+      "ticker": "ETH-USD",
+      "available": true,
+      "rows": 3125,
+      "date_min": "2017-11-09",
+      "date_max": "2026-05-30"
+    }
+  },
+  "macro": {
+    "vix": {
+      "source": "yfinance",
+      "ref": "^VIX",
+      "classification": "market_price_clean",
+      "rationale": "CBOE VIX daily index close; market-priced, not revised",
+      "available": true,
+      "rows": 4127,
+      "date_min": "2010-01-04",
+      "date_max": "2026-05-29"
+    },
+    "vix3m": {
+      "source": "yfinance",
+      "ref": "^VIX3M",
+      "classification": "market_price_clean",
+      "rationale": "CBOE 3-month VIX daily close; with VIX gives the VIX term structure",
+      "available": true,
+      "rows": 4126,
+      "date_min": "2010-01-04",
+      "date_max": "2026-05-29"
+    },
+    "bonds_tlt": {
+      "source": "yfinance",
+      "ref": "TLT",
+      "classification": "market_price_clean",
+      "rationale": "20y+ Treasury ETF daily close; market-priced rates proxy",
+      "available": true,
+      "rows": 4126,
+      "date_min": "2010-01-04",
+      "date_max": "2026-05-29"
+    },
+    "gold_gld": {
+      "source": "yfinance",
+      "ref": "GLD",
+      "classification": "market_price_clean",
+      "rationale": "gold ETF daily close; cross-asset risk proxy",
+      "available": true,
+      "rows": 4126,
+      "date_min": "2010-01-04",
+      "date_max": "2026-05-29"
+    },
+    "credit_hyg": {
+      "source": "yfinance",
+      "ref": "HYG",
+      "classification": "market_price_clean",
+      "rationale": "HY credit ETF daily close; credit-stress proxy",
+      "available": true,
+      "rows": 4126,
+      "date_min": "2010-01-04",
+      "date_max": "2026-05-29"
+    },
+    "usd_uup": {
+      "source": "yfinance",
+      "ref": "UUP",
+      "classification": "market_price_clean",
+      "rationale": "USD bull ETF daily close; dollar trend proxy",
+      "available": true,
+      "rows": 4126,
+      "date_min": "2010-01-04",
+      "date_max": "2026-05-29"
+    },
+    "ust10y": {
+      "source": "fred",
+      "ref": "DGS10",
+      "classification": "daily_next_day_only",
+      "rationale": "10y Treasury CMT; published EOD t by Treasury, not revised; use at t+1",
+      "available": true,
+      "rows": 4103,
+      "date_min": "2010-01-04",
+      "date_max": "2026-05-28"
+    },
+    "ust2y": {
+      "source": "fred",
+      "ref": "DGS2",
+      "classification": "daily_next_day_only",
+      "rationale": "2y Treasury CMT; published EOD t, not revised; use at t+1",
+      "available": true,
+      "rows": 4103,
+      "date_min": "2010-01-04",
+      "date_max": "2026-05-28"
+    }
+  },
+  "forbidden_series": {
+    "GDP": "revised aggregate; needs ALFRED vintage",
+    "CPIAUCSL": "revised; release/revision lag; needs PIT vintage",
+    "PAYEMS": "nonfarm payrolls; heavily revised; needs PIT vintage",
+    "UNRATE": "unemployment; revised; needs PIT vintage",
+    "PCE": "revised aggregate; needs PIT vintage"
+  },
+  "derived_features": {
+    "vix_term_structure": "vix / vix3m (>1 backwardation = stress)",
+    "yield_slope": "ust10y - ust2y (inversion = stress)",
+    "credit_trend": "HYG trend / drawdown state",
+    "usd_trend": "UUP trend state",
+    "gold_trend": "GLD trend state"
+  },
+  "basket_common_window": {
+    "start": "2017-11-09",
+    "end": "2026-05-22"
+  },
+  "timestamp_rule": "all features observed at close t, used only at t+1"
+}
