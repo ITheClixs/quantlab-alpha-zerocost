@@ -1,7 +1,11 @@
 # Data-Purchase Feasibility & Integration Checklist — Sharadar (Option A)
 
 **Date:** 2026-05-30
-**Status:** Feasibility checklist — **no purchase, no code, no strategy run** until this passes.
+**Status:** **FROZEN (2026-05-30)** — operator set a zero-cost-data-only constraint
+(`docs/research/2026-05-30-ZERO-COST-CONSTRAINT.md`); no paid acquisition is pursued.
+The ingestion/audit scaffold (`data/sharadar/`, commit `88cf14d`) is retained as
+dormant infrastructure, to run only if the operator later supplies data. Checklist
+below remains valid if/when paid acquisition is revisited.
 **Author:** QuantLab research
 **Builds on:** `2026-05-30-PAID-DATA-ACQUISITION-RECOMMENDATION.md`,
 `reports/signal_research/edgar_10q_v1/edgar_10q_data_audit.md`,
