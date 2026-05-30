@@ -1,0 +1,112 @@
+{
+  "name": "equity_return_data_audit",
+  "built_utc": "2026-05-30T08:33:26.840328+00:00",
+  "binding_question": "Survivorship-aware, CA-adjusted next-day return panel for the IV universe (2019-10-14..2023-07-28) without a survivorship-biased source?",
+  "primary_source": "HexQuant__Stocks-Daily-Price (symbol/date/ohlc/volume/adj_close; 6,320 US stocks)",
+  "verdict": "REJECT_CROSS_SECTIONAL_ON_DATA \u2014 run SPY/QQQ secondary diagnostic only",
+  "survivorship_label": "survivorship_biased",
+  "labels": [
+    "survivorship_biased_research_only",
+    "price_return_only_unless_adjclose_total",
+    "mapping_incomplete",
+    "liquidity_limited"
+  ],
+  "iv_symbols": 3893,
+  "hq_window_symbols": 5087,
+  "overlap": 2224,
+  "overlap_pct": 57.1,
+  "missing": 1669,
+  "missing_special_char": 0,
+  "missing_delisted_in_window": 701,
+  "missing_full_coverage_absent": 968,
+  "delist_probes": {
+    "AABA": {
+      "in_iv": true,
+      "in_hq_window": false
+    },
+    "TWTR": {
+      "in_iv": true,
+      "in_hq_window": false
+    },
+    "FB": {
+      "in_iv": true,
+      "in_hq_window": false
+    },
+    "RTN": {
+      "in_iv": true,
+      "in_hq_window": false
+    },
+    "CELG": {
+      "in_iv": true,
+      "in_hq_window": false
+    },
+    "XLNX": {
+      "in_iv": true,
+      "in_hq_window": false
+    },
+    "MXIM": {
+      "in_iv": true,
+      "in_hq_window": false
+    },
+    "NLSN": {
+      "in_iv": true,
+      "in_hq_window": false
+    },
+    "CERN": {
+      "in_iv": true,
+      "in_hq_window": false
+    },
+    "ZNGA": {
+      "in_iv": true,
+      "in_hq_window": false
+    },
+    "SIVB": {
+      "in_iv": true,
+      "in_hq_window": false
+    },
+    "FRC": {
+      "in_iv": true,
+      "in_hq_window": false
+    },
+    "DISCA": {
+      "in_iv": true,
+      "in_hq_window": false
+    },
+    "WORK": {
+      "in_iv": true,
+      "in_hq_window": false
+    },
+    "MGLN": {
+      "in_iv": true,
+      "in_hq_window": false
+    }
+  },
+  "etf_probes": {
+    "SPY": {
+      "in_iv": true,
+      "in_hq_window": false
+    },
+    "QQQ": {
+      "in_iv": true,
+      "in_hq_window": false
+    },
+    "DIA": {
+      "in_iv": true,
+      "in_hq_window": false
+    },
+    "IWM": {
+      "in_iv": true,
+      "in_hq_window": false
+    }
+  },
+  "adj_close_note": "adj_close < close for dividend payers (e.g. AAPL) -> dividend+split adjusted (total-return proxy)",
+  "labels_legend": [
+    "equity_returns_clean",
+    "price_return_only",
+    "partial_survivorship",
+    "survivorship_biased_research_only",
+    "mapping_incomplete",
+    "liquidity_limited",
+    "reject"
+  ]
+}
