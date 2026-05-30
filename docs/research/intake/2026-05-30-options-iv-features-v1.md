@@ -1,8 +1,12 @@
 # Intake — Options-IV Features v1 (research_only)
 
 **Date:** 2026-05-30
-**Status:** PRE-REGISTRATION (intake submitted; cross-sectional track gated on a
-secondary equity-return data audit; **no strategy code yet**)
+**Status:** CLOSED on data grounds (operator decision 2026-05-30). The cross-sectional
+track was REJECTED — the only available return source (HexQuant) is survivorship-biased
+(`reports/signal_research/options_iv_v1/equity_return_data_audit.md`, commit `3f9a658`).
+The SPY/QQQ secondary diagnostic was declined (a single-index VRP-proxy overlay with a
+strong prior of being subsumed by vol-targeting). No strategy code was written.
+Program moves to the news/sentiment timestamp/PIT audit.
 **Strategy name:** `options_iv_features_v1`
 **Proposer:** QuantLab research
 **Promotion intent:** **`research_only`** — hard ceiling from the data audit (see §4)
