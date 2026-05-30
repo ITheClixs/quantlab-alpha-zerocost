@@ -93,6 +93,7 @@ class PortfolioResult:
     daily_returns: F
     metrics: dict[str, float]
     weights: dict[str, F]
+    contributions: dict[str, F]  # per-instrument net daily return contribution
 
 
 def metrics(net: F) -> dict[str, float]:
@@ -129,11 +130,14 @@ def backtest_portfolio(insts: dict[str, InstrumentSeries], target_weights: dict[
     active = np.where(active > 0, active, 1.0)
     port = np.zeros(n)
     held: dict[str, F] = {}
+    contrib: dict[str, F] = {}
     for name in names:
         w_eff = raw[name] / active  # equal split across active
         held[name] = w_eff
         r = insts[name].returns
         turn = np.abs(np.diff(w_eff, prepend=w_eff[0]))
         cost = turn * (cost_bps[name] * 1e-4)
-        port += w_eff * r - cost
-    return PortfolioResult(daily_returns=port, metrics=metrics(port), weights=held)
+        c = w_eff * r - cost
+        contrib[name] = c
+        port += c
+    return PortfolioResult(daily_returns=port, metrics=metrics(port), weights=held, contributions=contrib)
