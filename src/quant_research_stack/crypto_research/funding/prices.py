@@ -34,7 +34,7 @@ KLINE_RAW_COLUMNS = [
     "open_time", "open", "high", "low", "close", "volume", "close_time",
     "quote_volume", "count", "taker_buy_volume", "taker_buy_quote_volume", "ignore",
 ]
-NORMALIZED_COLUMNS = ["symbol", "ts", "open", "close"]
+NORMALIZED_COLUMNS = ["symbol", "ts", "open", "high", "low", "close"]
 
 
 def _fetch(url: str, *, timeout: int = 60, retries: int = 5) -> bytes:
@@ -56,25 +56,26 @@ def _base(market: str) -> str:
     return _SPOT_BASE if market == "spot" else _PERP_BASE
 
 
-def _prefix(symbol: str, market: str) -> str:
+def _prefix(symbol: str, market: str, interval: str) -> str:
     seg = "spot/monthly/klines" if market == "spot" else "futures/um/monthly/klines"
-    return f"data/{seg}/{symbol.upper()}/1d/"
+    return f"data/{seg}/{symbol.upper()}/{interval}/"
 
 
-def klines_url(symbol: str, market: str, month: str) -> str:
+def klines_url(symbol: str, market: str, month: str, interval: str = "1d") -> str:
     sym = symbol.upper()
-    return f"{_base(market)}/{sym}/1d/{sym}-1d-{month}.zip"
+    return f"{_base(market)}/{sym}/{interval}/{sym}-{interval}-{month}.zip"
 
 
-def available_months(symbol: str, market: str) -> list[str]:
-    prefix = _prefix(symbol, market)
+def available_months(symbol: str, market: str, interval: str = "1d") -> list[str]:
+    prefix = _prefix(symbol, market, interval)
+    token = f"-{interval}-"
     out: list[str] = []
     marker = ""
     while True:
         url = f"{_LIST_HOST}?prefix={prefix}&max-keys=1000" + (f"&marker={marker}" if marker else "")
         root = ET.fromstring(_fetch(url, timeout=30).decode())
         keys = [e.findtext(_NS + "Key") or "" for e in root.iter(_NS + "Contents")]
-        out += [k.split("-1d-")[1].replace(".zip", "") for k in keys if k.endswith(".zip") and "-1d-" in k]
+        out += [k.split(token)[1].replace(".zip", "") for k in keys if k.endswith(".zip") and token in k]
         if root.findtext(_NS + "IsTruncated") != "true" or not keys:
             break
         marker = keys[-1]
@@ -82,7 +83,7 @@ def available_months(symbol: str, market: str) -> list[str]:
 
 
 def normalize_klines(raw: pl.DataFrame, *, symbol: str) -> pl.DataFrame:
-    missing = [c for c in ("open_time", "open", "close") if c not in raw.columns]
+    missing = [c for c in ("open_time", "open", "high", "low", "close") if c not in raw.columns]
     if missing:
         raise ValueError(f"klines frame missing columns: {missing}")
     # open_time may be ms or us epoch depending on month; normalize by magnitude.
@@ -98,6 +99,8 @@ def normalize_klines(raw: pl.DataFrame, *, symbol: str) -> pl.DataFrame:
             pl.lit(symbol.upper()).alias("symbol"),
             ts_us.alias("ts"),
             pl.col("open").cast(pl.Float64),
+            pl.col("high").cast(pl.Float64),
+            pl.col("low").cast(pl.Float64),
             pl.col("close").cast(pl.Float64),
         )
         .select(NORMALIZED_COLUMNS)
@@ -105,8 +108,8 @@ def normalize_klines(raw: pl.DataFrame, *, symbol: str) -> pl.DataFrame:
     )
 
 
-def _read_month(symbol: str, market: str, month: str) -> pl.DataFrame:
-    raw = _fetch(klines_url(symbol, market, month))
+def _read_month(symbol: str, market: str, month: str, interval: str = "1d") -> pl.DataFrame:
+    raw = _fetch(klines_url(symbol, market, month, interval))
     with zipfile.ZipFile(io.BytesIO(raw)) as z:
         body = z.open(z.namelist()[0]).read()
     has_header = body[:9].lower().startswith(b"open_time")
@@ -117,22 +120,28 @@ def _read_month(symbol: str, market: str, month: str) -> pl.DataFrame:
     )
 
 
-def load_daily_klines(symbol: str, market: str, months: list[str] | None = None,
-                      *, use_cache: bool = True) -> pl.DataFrame:
-    """Load + normalize the full daily-close history for a symbol/market (cached)."""
+def load_klines(symbol: str, market: str, interval: str = "1d",
+                months: list[str] | None = None, *, use_cache: bool = True) -> pl.DataFrame:
+    """Load + normalize the full OHLC history for a symbol/market/interval (cached)."""
     _CACHE.mkdir(parents=True, exist_ok=True)
-    cache = _CACHE / f"klines_{market}_{symbol.upper()}_1d.parquet"
+    cache = _CACHE / f"klines_{market}_{symbol.upper()}_{interval}.parquet"
     if use_cache and cache.exists():
         return pl.read_parquet(cache)
-    months = months or available_months(symbol, market)
+    months = months or available_months(symbol, market, interval)
     frames = []
     for m in months:
-        frames.append(normalize_klines(_read_month(symbol, market, m), symbol=symbol))
+        frames.append(normalize_klines(_read_month(symbol, market, m, interval), symbol=symbol))
         time.sleep(0.05)  # gentle pacing — Vision resets under rapid sequential load
     out = pl.concat(frames, how="vertical").unique(subset=["ts"], keep="last").sort("ts")
     if use_cache and out.height:
         out.write_parquet(cache)
     return out
+
+
+def load_daily_klines(symbol: str, market: str, months: list[str] | None = None,
+                      *, use_cache: bool = True) -> pl.DataFrame:
+    """Backwards-compatible daily wrapper around `load_klines`."""
+    return load_klines(symbol, market, "1d", months, use_cache=use_cache)
 
 
 def daily_funding(funding: pl.DataFrame) -> pl.DataFrame:
@@ -165,3 +174,29 @@ def align_carry(funding: pl.DataFrame, spot: pl.DataFrame, perp: pl.DataFrame) -
         .sort("date")
     )
     return out
+
+
+def align_carry_8h(funding: pl.DataFrame, spot8h: pl.DataFrame, perp8h: pl.DataFrame) -> pl.DataFrame:
+    """8h carry panel on the funding-settlement grid (00/08/16 UTC).
+
+    Spot & perp OHLC at each 8h bar joined to the single funding rate settled at that
+    bar's open time. Carries high/low for the intrabar adverse-basis (liquidation) check.
+    Inner-join on the settlement timestamp so each row has spot, perp, and one funding.
+    """
+    # Binance funding calc_time carries ms jitter (e.g. 00:00:00.002); 8h klines open
+    # exactly on 00/08/16:00:00. Round the funding key to the hour so the join matches
+    # every settlement (an exact-timestamp join silently drops the jittered ~45%).
+    s = spot8h.select([pl.col("ts"), pl.col("close").alias("spot_close"),
+                       pl.col("high").alias("spot_high"), pl.col("low").alias("spot_low")])
+    p = perp8h.select([pl.col("ts"), pl.col("close").alias("perp_close"),
+                       pl.col("high").alias("perp_high"), pl.col("low").alias("perp_low")])
+    f = funding.select([pl.col("funding_time").dt.round("1h").alias("ts"), "funding_rate"])
+    return (
+        s.join(p, on="ts", how="inner")
+        .join(f, on="ts", how="inner")
+        .with_columns(
+            pl.col("ts").dt.date().alias("date"),
+            (pl.col("perp_close") / pl.col("spot_close") - 1.0).alias("basis"),
+        )
+        .sort("ts")
+    )

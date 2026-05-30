@@ -6,13 +6,13 @@
 
 Strategy A: long spot / short USDT-M perp on BTC + ETH, equal-weight pooled, re-neutralized daily. Costs: spot taker 10.0bps + perp taker 5.0bps one-way, plus daily hedge-maintenance turnover and entry/exit. Returns per unit one-side notional (carry yield). Annualized at sqrt(365).
 
-## ⚠️ Realism caveat — read before the headline
+## ⚠️ Read the realism pass before trusting the Sharpe
 
-The pooled Sharpe below (8.6) is **not deployable-real** — it is the **carry illusion**. Spot and the perp track almost perfectly at the *same-venue daily close*, so the basis/price term has near-zero variance and the book is a smooth, low-variance positive funding drip. A tradable book carries risks this daily-close model omits: intraday basis gaps (the perp dislocated from spot by multiple % in the 2020-03 and 2021-05 crashes), funding spikes, **short-leg liquidation/margin risk**, and execution slippage off the close. A realistic funding-carry book runs Sharpe ~1-2, not ~8. **Trust the annual return and the per-year regime picture; do NOT trust the Sharpe.**
+The pooled Sharpe below (8.6) is high but **not a marking-frequency illusion** — the 8h realism pass (`funding_carry_realism_results.md`) re-marked the book on the funding-settlement grid and the Sharpe was unchanged (~8.6). The spot-perp basis is genuinely tight, so an *unlevered, fully-collateralized* delta-neutral carry really did earn ~14%/yr at low daily variance in 2020-2026. The danger is the **fat left tail, not the daily vol**: at 1x it is capital-inefficient, and any leverage introduces short-perp **liquidation in crashes** (the stress test goes negative at 3x and -90% at 10x). The Sharpe does not price that tail. **Trust the annual return and per-year regime picture; treat the Sharpe as a calm-regime figure that ignores the crash-liquidation tail.**
 
 ## Headline (pooled book, base cost)
 
-- Sharpe **8.56** (illusory — see caveat), ann return **13.94%**, ann vol 1.53%, max DD -1.7% (understated), Calmar 8.32.
+- Sharpe **8.56** (calm-regime; ignores the leverage/liquidation tail — see above), ann return **13.94%**, ann vol 1.53%, max DD -1.7% (unlevered), Calmar 8.32.
 - Per asset: BTC Sharpe 8.61 (12.70%/yr); ETH Sharpe 7.65 (15.19%/yr).
 
 ## Per-year net return (pooled, %, after cost)
@@ -57,4 +57,4 @@ The pooled Sharpe below (8.6) is **not deployable-real** — it is the **carry i
 
 ## Verdict
 
-**DO_NOT_ADVANCE.** The carry is **real and persistent** — net-positive in 6 of 7 years, with clean placebo and statistical separation (funding, not price, is the source). But it **does not clear the pre-registered regime gate**: the most recent regime (2026 YTD, -0.16% over 120 days) is net-negative after cost, and the gate (no-weakening) requires non-negative 2022 *and* 2026. Separately and more importantly, the headline Sharpe is an **illusion** of the daily-close basis model (see caveat) — a realistic execution/risk model would materially lower the risk-adjusted edge. **DO_NOT_ADVANCE.** No paper/live.
+**DO_NOT_ADVANCE.** The carry is **real and persistent** — net-positive in 6 of 7 years, with clean placebo and statistical separation (funding, not price, is the source). But it **does not clear the pre-registered regime gate**: the most recent regime (2026 YTD, -0.16% over 120 days) is net-negative after cost, and the gate (no-weakening) requires non-negative 2022 *and* 2026. The high Sharpe is real for an unlevered book but masks a crash-liquidation tail that turns the strategy negative under any leverage (see the realism pass). **DO_NOT_ADVANCE.** No paper/live.
