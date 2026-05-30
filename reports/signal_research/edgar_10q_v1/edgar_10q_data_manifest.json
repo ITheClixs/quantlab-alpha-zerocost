@@ -1,0 +1,32 @@
+{
+  "name": "edgar_10q_v1_data_audit",
+  "built_utc": "2026-05-30T09:55:00.502993+00:00",
+  "binding_question": "On-disk or cleanly+survivorship-safely free-sourceable 10-Q research panel?",
+  "verdict": "REJECT_ON_DATA \u2014 no on-disk 10-Q; free assembly blocked by missing survivorship-safe labels + PIT constituents",
+  "labels": [
+    "return_panel_required",
+    "mapping_incomplete",
+    "reject"
+  ],
+  "scan": {
+    "hf_dataset_count": 30,
+    "name_hits_10q": [],
+    "file_hits_10q": [],
+    "sec_text_datasets_present": [
+      "jlohding__sp500-edgar-10k"
+    ],
+    "on_disk_10q": false
+  },
+  "return_panel_status": "no survivorship-safe free return panel (equity_return_data_audit, commit 3f9a658; HexQuant survivorship-biased). 10-K worked only because returns were BUNDLED.",
+  "labels_legend": [
+    "filing_timestamp_clean",
+    "quarterly_frequency_sufficient",
+    "survivorship_safe_enough",
+    "mapping_incomplete",
+    "labels_available",
+    "return_panel_required",
+    "text_sections_incomplete",
+    "research_only",
+    "reject"
+  ]
+}
