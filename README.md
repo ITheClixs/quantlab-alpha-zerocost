@@ -1,549 +1,449 @@
-# QuantLab Alpha
+# QuantLab Alpha — A Negative-Results Study in Zero-Cost Quantitative Alpha
 
 [![Stage](https://img.shields.io/badge/QUANTLAB__STAGE-paper-orange)](docs/runbooks/stage_promotion.md)
 [![Kill switch](https://img.shields.io/badge/kill__switch-armed-red)](docs/runbooks/kill_switch.md)
-[![Tests](https://img.shields.io/badge/tests-passing-brightgreen)](#testing-and-verification)
+[![Tests](https://img.shields.io/badge/tests-passing-brightgreen)](#6-reproducibility)
+[![Alpha](https://img.shields.io/badge/alpha-none--deployable%20(research--only)-lightgrey)](#7-limitations--honest-disclosures)
+
+> **Honest headline.** This program produced **0 deployable, 0 paper, and 0 live
+> strategies.** That is not the failure of the project — it *is* the result. The
+> deliverable is (1) a rigorous, leakage-safe validation harness and (2) the
+> reproducible, documented map of *which data changes the answer*. Under a strict
+> zero-cost data constraint, no taker-tradable alpha survived out-of-sample
+> validation. The binding constraint is the **information set**, not the method.
+
+---
 
 ## Abstract
 
-QuantLab Alpha is a local-first alpha research platform for mid-frequency equities and tick-frequency crypto. Its central design decision is a two-layer separation between numeric prediction and language-model governance:
+QuantLab Alpha is a local-first, stage-gated alpha research platform for a single
+operator on commodity Apple-Silicon hardware. Its architecture is four staged
+subsystems: an **S1 tabular predictor**, an **S2 LLM governor** that vetoes signals
+not supported by a local research corpus, **S3 free-data feeds and broker
+abstractions**, and **S4 promotion-gated execution** with a file-based kill switch and
+an append-only, byte-for-byte replayable audit log. The platform's delivered
+scientific contribution is *not* a profitable strategy. It is a reproducible
+validation harness — purged/embargoed cross-validation, weighted zero-mean R²,
+adversarial feature validation, a seeded noise floor, probability of backtest
+overfitting, deflated Sharpe ratios, and stationary-bootstrap confidence intervals —
+together with the honest finding that **under a zero-cost data constraint no
+taker-tradable alpha survives out-of-sample validation**. Across an S1 tabular
+predictor and roughly thirteen closed signal-research branches culminating in a
+delta-neutral funding-carry capstone, the binding constraint is shown to be the
+information set, not the modelling method. This repository is **research-only**: it
+reports **0 deployable strategies** and authorizes no paper or live trading.
 
-1. **S1 Tabular Predictor** estimates `responder_6` and related return targets with leakage-aware tabular machine learning.
-2. **S2 LLM Governor** reviews trade candidates through a retrieval-augmented, citation-constrained local LLM pipeline.
+---
 
-The platform is not a claim of profitability. It is a research harness for testing whether open data, engineered market features, and local models can produce signals that pass out-of-sample validation before they are considered for paper trading. The current branch includes S1 alpha modules, S2 governor modules, S3 feed/broker adapters, S4 paper-stage execution/risk modules, platform ADRs, runbooks, and S4.1 paper-validation tooling.
+## 1. Introduction
 
-## Research Thesis
+The problem is the standard one stated honestly: can a single operator, using only
+free or self-authenticated data and local compute, build something that survives
+hedge-fund-grade out-of-sample validation? Most retail "alpha" evaporates the moment
+transaction costs, survivorship bias, and overfitting controls are applied. The
+contribution of this work is to apply those controls rigorously, document every
+failure, and isolate *why* each one fails.
 
-The working thesis is:
+The platform rests on a **two-layer thesis**: numeric prediction and evidence-based
+governance should be orthogonal responsibilities.
 
-> A local alpha stack should separate fast numerical prediction from slower evidence-based governance, and no trade candidate should pass unless the predictor, the governor, risk limits, and audit trail agree.
+1. **S1** is the only authoritative source of numeric forecasts. It produces a
+   prediction and a confidence; it never decides to trade.
+2. **S2** is an LLM governor that may only *veto* or *explain*. Every `pass` verdict
+   must cite at least one chunk of the local research corpus or be downgraded to
+   `insufficient_evidence`. The governor never originates a trade.
 
-This gives four concrete research questions:
+This separation gives four concrete research questions.
 
 | ID | Research question | Repository evidence |
 |---|---|---|
-| RQ1 | Can tabular models improve weighted zero-mean R2 on Jane Street-style targets without leakage? | `src/quant_research_stack/alpha/`, `scripts/train_s1.py`, `configs/alpha.yaml` |
-| RQ2 | Can fold-stable features survive adversarial validation and noise-feature controls? | `alpha/features.py`, `alpha/adversarial.py`, `scripts/alpha_s1_success_gate.py` |
-| RQ3 | Can an LLM governor veto unsupported trades while being forced to cite local research chunks? | `src/quant_research_stack/governor/`, `configs/governor.yaml`, ADR 0005 |
-| RQ4 | Can staged promotion prevent accidental live trading before paper and shadow evidence exists? | `docs/runbooks/`, ADR 0002, `QUANTLAB_STAGE` |
+| RQ1 | Can leakage-safe tabular models clear a pre-registered weighted zero-mean R² gate on Jane-Street-style targets? | [`src/quant_research_stack/alpha/`](src/quant_research_stack/alpha/), [`docs/research/VALIDATION_RUNBOOK.md`](docs/research/VALIDATION_RUNBOOK.md) |
+| RQ2 | Do candidate features survive adversarial validation and a seeded random-noise floor? | [`alpha/adversarial.py`](src/quant_research_stack/alpha/adversarial.py), [`alpha/metrics.py`](src/quant_research_stack/alpha/metrics.py) |
+| RQ3 | Can an LLM governor veto unsupported trades while being forced to cite local research chunks? | [`src/quant_research_stack/governor/`](src/quant_research_stack/governor/), [ADR 0005](docs/architecture/adrs/0005-llm-governor-citation-requirement.md) |
+| RQ4 | Can staged promotion prevent accidental live trading before paper/shadow evidence exists? | [`docs/runbooks/`](docs/runbooks/), [ADR 0002](docs/architecture/adrs/0002-three-stage-promotion-gate.md) |
 
-## Contributions
+The answer to RQ1 is **no, not under free data** (S1 sits below its gate). RQ2–RQ4 are
+answered affirmatively as *infrastructure*: the controls work and they correctly
+reject fragile results. The remainder of this paper is the evidence.
 
-The latest commits move the project from a data/model workspace into a structured research platform:
+---
 
-1. **S1 alpha package** with feature engineering, purged cross-validation, base model wrappers, stacking, metrics, registry, inference, adversarial validation, and training scripts.
-2. **S2 governor package** with stable corpus indexing, BM25 retrieval, FAISS dense retrieval, reranking, hybrid retrieval orchestration, fixed retrieval-query template, and Pydantic verdict schema.
-3. **Operational modules and specifications** for a four-subsystem platform: S1 predictor, S2 governor, S3 feeds/brokers, and S4 execution/risk.
-4. **Stage-gated safety model** using `paper`, `live_shadow`, and `live` promotion states.
-5. **Local-only LLM design** using GGUF models and local research corpora rather than paid hosted inference.
+## 2. Platform Architecture
 
-## What This Is
-
-QuantLab Alpha is a single-operator research and execution platform for:
-
-- Jane Street-style tabular forecasting;
-- open-data market and order-book research;
-- feature stability testing;
-- local LLM-governed trade vetting;
-- paper-trading and future broker-gated execution.
-
-It pairs a tabular predictor stack with an LLM governor that cannot approve a trade unless its verdict is valid JSON and, for pass decisions, backed by retrieved paper chunk citations.
-
-## What This Is Not
-
-This is not a hedge fund in a box, an HFT colocation stack, or a replacement for professional market data. Free feeds impose hard limits:
-
-- crypto can use public Binance/Coinbase WebSocket streams;
-- US equities on free tiers are delayed or coarse;
-- yfinance-style sources are suitable for research and backtests, not live execution.
-
-This repository is also not financial advice. The operator is responsible for funds, taxes, broker rules, and local regulation.
-
-## Current Implementation Snapshot
-
-| Subsystem | Current state |
-|---|---|
-| S1 Tabular Predictor | Implemented package under `src/quant_research_stack/alpha/`; includes features, CV, models, stacking, metrics, inference, registry, and scripts |
-| S2 LLM Governor | Implemented foundation under `src/quant_research_stack/governor/`; includes corpus, BM25, dense index, reranker protocol, hybrid retrieval, schema, query builder |
-| S3 Feeds + Brokers | Implemented package under `src/quant_research_stack/feeds/` and `src/quant_research_stack/brokers/`; includes public feed adapters, recorder/replayer, null broker, Alpaca paper, Binance testnet, and contract tests |
-| S4 Execution + Risk | Implemented package under `src/quant_research_stack/execution/`; includes signal pairing, risk gate, sizing, broker routing, position book, reconciliation, kill switch, audit log, daemon, and promotion report tooling |
-| S4.1 Paper Validation | Implemented package under `src/quant_research_stack/validation/` plus `scripts/tv_validation_report.py`; includes Alpaca/fixture forward bars, hit rate, governor block rate, net daily PnL, drawdown, rolling Sharpe, and per-signal parquet outputs |
-| Stage | `QUANTLAB_STAGE`, default target is `paper` |
-| Kill switch | `KILL_TRADING` file in repo root, documented in runbooks |
-| S1 success target | holdout weighted zero-mean R2 at least `0.012`, fold standard deviation at most `0.002` |
-| S2 retrieval | BM25 top-20, dense top-20, rerank to top-5 |
-| S2 runtime plan | Tier 1 Qwen 0.5B LoRA, Tier 2 Mistral Small 22B GGUF, Tier 3 Yi 34B GGUF |
-
-## System Architecture
-
-```text
-                    operator shell / runbooks / stage gate
-                                  |
-                                  v
-        +---------------- structured signal bus ----------------+
-        |                                                       |
-        v                                                       v
-S1 Tabular Predictor                                  S2 LLM Governor
-alpha package                                         governor package
-LightGBM/XGBoost/CatBoost/MLP                         BM25 + dense + rerank
-purged CV + stacking                                  citation-required JSON
-        |                                                       |
-        +-----------------------+-------------------------------+
-                                |
-                                v
-                       S4 Execution + Risk
-                       paper -> live_shadow -> live
-                       kill switch, audit log, caps
+```mermaid
+flowchart LR
+  raw[raw free data] --> feat[features + meta-features]
+  feat --> S1[S1 tabular predictor]
+  S1 --> S2[S2 LLM governor<br/>GBNF + paper citations]
+  S2 --> S4[S4 execution<br/>QUANTLAB_STAGE gate]
+  S4 --> audit[(append-only audit log)]
 ```
 
-The intended per-trade flow is:
+**Stage gating.** A single operator-controlled environment variable,
+`QUANTLAB_STAGE`, selects the broker class loaded at process start: `paper`
+(simulated brokers), `live_shadow` (read-only real account routed to a null broker),
+or `live` (real money). In-process self-promotion is forbidden by design — promotion
+requires a signed runbook commit, an edited `.env`, and a process restart
+([ADR 0002](docs/architecture/adrs/0002-three-stage-promotion-gate.md),
+[stage promotion runbook](docs/runbooks/stage_promotion.md)).
 
-```text
-Market tick or bar
-  -> S1 emits numeric prediction and confidence
-  -> S2 retrieves paper evidence and emits pass / veto / insufficient_evidence
-  -> S4 applies stage, risk, stale-model, exposure, and kill-switch checks
-  -> audit log records every decision and veto
-```
+**Kill-switch precedence.** A `KILL_TRADING` file in the repository root, a stale
+model, a data outage, or a drawdown breach halts trading; the kill path takes
+precedence over every other decision in S4
+([ADR 0014](docs/architecture/adrs/0014-kill-switch-precedence.md),
+[kill switch runbook](docs/runbooks/kill_switch.md)).
 
-## Data and Research Corpus
+**Audit and replay.** Every S2/S3/S4 decision lands in an append-only JSONL audit log.
+Each rotation is made read-only after closing, and replay of the log must reproduce the
+same decision sequence byte-for-byte. The full design rationale is in the
+[platform design spec](docs/superpowers/specs/2026-05-14-quantlab-alpha-platform-design.md)
+and the two-tier separation in
+[ADR 0001](docs/architecture/adrs/0001-two-tier-tabular-llm.md).
 
-The platform is built around public or user-authenticated data:
+---
 
-| Source class | Role |
-|---|---|
-| Jane Street HF mirror | canonical local S1 target source in `configs/alpha.yaml` |
-| Kaggle Jane Street variants | validation and augmentation sources when rules and auth allow |
-| Hugging Face finance datasets | sentiment, instructions, filings, time series, and market data |
-| arXiv/Paper corpus | S2 retrieval and LLM governor evidence |
-| Local model store | GGUF LLMs, embeddings, time-series baselines, trained artifacts |
+## 3. Machine-Learning Methodology
 
-At platform-spec time, the local corpus was recorded as 208 GB across 20,376 files, including HF datasets, Kaggle datasets, Kaggle competitions, HF models, arXiv PDFs, and paper Q&A records. The reproducible source of truth remains the manifests under `manifests/` plus artifact reports under `reports/`.
+The harness is the deliverable, so the methodology section is precise. Each control
+links to the module that implements it and to the
+[validation runbook](docs/research/VALIDATION_RUNBOOK.md).
 
-## S1 Methodology: Tabular Alpha Predictor
+### 3.1 Purged & embargoed walk-forward / CPCV
 
-S1 is the only subsystem that produces numeric forecasts. Its target is `responder_6`, and its primary metric is weighted zero-mean R2.
+Implemented in [`alpha/cv.py`](src/quant_research_stack/alpha/cv.py). For fold $j$ the
+validation dates form an interval $V_j = [a_j, b_j]$. With purge length $p$ and embargo
+length $e$, a training date $d$ is admissible only if
 
-### Feature Construction
+$$d < a_j - p \quad \vee \quad d > b_j + e.$$
 
-For a base feature `x_t`, lag features are:
+**Purging** removes training rows whose label horizon overlaps the validation window
+(so a label observed in training does not depend on a price realized inside the
+validation set). The **embargo** additionally drops a buffer of rows immediately after
+each validation block, blocking serial-correlation leakage across the split. Combinatorial
+purged cross-validation (CPCV) generalizes this to multiple held-out groups so the
+overfitting estimate (§3.6) sees many train/test recombinations.
 
-```math
-x_{t,l}^{lag} = x_{t-l}.
-```
+### 3.2 Weighted zero-mean R²
 
-Plain English: the model sees past values of each feature, not future values.
+Implemented in [`alpha/metrics.py`](src/quant_research_stack/alpha/metrics.py). The
+Jane-Street-style score is
 
-Rolling means over a window `w` are:
+$$R^2_{w}=1-\frac{\sum_i w_i (y_i-\hat y_i)^2}{\sum_i w_i y_i^2}.$$
 
-```math
-\mu_{t,w}(x) =
-\frac{1}{w}
-\sum_{i=0}^{w-1} x_{t-i}.
-```
+The denominator is taken about **zero**, not about the sample mean. A score above zero
+means the model beats the naive "predict zero return" baseline; the metric **can be
+negative** when a model is worse than that baseline — which several S1 base learners
+are on the holdout (§4.1).
 
-Plain English: this smooths recent feature history over `w` observations.
+### 3.3 Adversarial validation
 
-Rolling volatility is:
+Implemented in
+[`alpha/adversarial.py`](src/quant_research_stack/alpha/adversarial.py). A classifier is
+trained to distinguish train rows from holdout rows on a per-feature basis. Any feature
+whose train-vs-holdout classifier **AUC > 0.6** is dropped or transformed, because such
+a feature carries a regime shift the model would exploit in-sample and lose on the
+holdout.
 
-```math
-\sigma_{t,w}(x) =
-\sqrt{
-    \frac{1}{w-1}
-    \sum_{i=0}^{w-1}
-    (x_{t-i} - \mu_{t,w}(x))^2
-}.
-```
+### 3.4 Noise-floor control
 
-Plain English: this measures how unstable the feature has been over the same lookback window.
+A seeded Gaussian feature $\eta_i \sim N(0,1)$ is injected into every training run. Any
+engineered feature ranked **below** that pure-noise feature in $\ge 3$ of $5$ folds is
+removed. This is a direct, brutal test: a real signal must beat random noise on a stable
+majority of folds or it does not enter the model.
 
-Cross-sectional ranks are:
+### 3.5 Stacking meta-learner
 
-```math
-\mathrm{rank}_{t,j}(x)
-=
-\frac{1}{M_t - 1}
-\sum_{k=1}^{M_t}
-\mathbf{1}\{x_{t,k} < x_{t,j}\}.
-```
+Implemented in [`alpha/stacking.py`](src/quant_research_stack/alpha/stacking.py). Let
+$Z$ be the matrix of **out-of-fold** base-model predictions. A non-negative ridge
+meta-model solves
 
-Plain English: instead of using only raw values, the model can ask where one symbol sits relative to other symbols at the same date.
+$$\hat a = \arg\min_{a}\Big[\sum_i w_i\,(y_i - Z_i a)^2 + \alpha\sum_j a_j^2\Big],\qquad a_j \ge 0,$$
 
-A seeded noise feature is included as a negative control:
-
-```math
-\eta_i \sim N(0,1).
-```
-
-Plain English: real features that rank below random noise are suspicious and can be discarded.
-
-### Leakage Control
-
-For fold `j`, validation dates form an interval:
-
-```math
-V_j = [a_j, b_j].
-```
-
-With purge length `p` and embargo length `e`, training dates must satisfy:
-
-```math
-d < a_j - p
-\quad
-\vee
-\quad
-d > b_j + e.
-```
-
-Plain English: samples near the validation period are removed so labels and market regimes do not leak across the split.
-
-### Weighted Zero-Mean R2
-
-The Jane Street-style score is:
-
-```math
-R_w^2 =
-1 -
-\frac{\sum_i w_i (y_i - \hat{y}_i)^2}
-     {\sum_i w_i y_i^2}.
-```
-
-Plain English: a score above zero means the model beats the baseline that predicts zero for every row.
-
-### S1 Training Objective
-
-The general weighted objective is:
-
-```math
-\hat{\theta}
-=
-\arg\min_{\theta}
-[
-    \sum_{i=1}^{N} w_i (y_i - f_{\theta}(x_i))^2
-    + \lambda \Omega(\theta)
-].
-```
-
-Plain English: the model is rewarded for accurate weighted predictions and penalized for excessive complexity.
-
-### Base Learner Families
-
-The current S1 design supports:
-
-- Ridge regression as a linear baseline;
-- LightGBM with early stopping on weighted R2;
-- XGBoost with histogram tree method;
-- CatBoost for categorical-symbol style effects;
-- MLP with dropout and MPS/mixed-precision support;
-- compact sequence models for short windows.
-
-Gradient boosting is modeled as:
-
-```math
-F_m(x) = F_{m-1}(x) + \eta f_m(x).
-```
-
-Plain English: each tree adds a small correction to the previous ensemble prediction.
-
-For squared error, the residual target at boosting step `m` is:
-
-```math
-r_{i,m} = y_i - F_{m-1}(x_i).
-```
-
-Plain English: every new tree learns what the prior trees still missed.
-
-### Positive Linear Stacking
-
-Let `Z` be the matrix of out-of-fold predictions from base models. A positive Ridge stacker solves:
-
-```math
-\hat{a}
-=
-\arg\min_{a}
-[
-    \sum_i w_i (y_i - Z_i a)^2
-    + \alpha \sum_j a_j^2
-],
-\qquad
-a_j \ge 0.
-```
-
-Plain English: the stacker blends models, penalizes unstable weights, and prevents a base model from being used with a negative sign.
-
-The final stacked forecast is:
-
-```math
-\hat{y}_i^{stack} = \sum_j \hat{a}_j \hat{y}_{i,j}.
-```
-
-Plain English: final S1 output is a weighted blend of base model predictions.
-
-### Success Gate
-
-The S1 milestone gate is enforced from the produced `metrics.json` and retrain
-runbook checks:
-
-```text
-holdout weighted zero-mean R2 >= 0.012
-fold standard deviation of R2 <= 0.002
-improvement over Ridge baseline >= 60%
-```
-
-This gate blocks downstream promotion if the model wins on only one lucky fold.
-
-## S2 Methodology: LLM Governor and RAG
-
-S2 never originates trades. It receives candidate S1 signals and returns one of:
-
-```text
-pass | veto | insufficient_evidence
-```
-
-A `pass` verdict must include citations to local research chunks unless it is a Tier 1 fast-gate verdict that still requires later Tier 2 review.
-
-### Corpus Index
-
-Each paper chunk is stored with:
-
-```text
-id, source_type, source_path, chunk_index, text, sha256, n_words
-```
-
-The corpus hash is:
-
-```math
-H(D) =
-\mathrm{SHA256}
-[
-    (id_1, h_1),
-    (id_2, h_2),
-    ...,
-    (id_N, h_N)
-].
-```
-
-Plain English: if chunk IDs or chunk hashes change, the index metadata changes too.
-
-### Hybrid Retrieval
-
-S2 combines sparse and dense retrieval:
-
-```math
-C(q) = C_{BM25}(q) \cup C_{dense}(q).
-```
-
-Plain English: candidate evidence comes from both keyword overlap and vector similarity.
-
-Dense retrieval uses cosine similarity:
-
-```math
-s_{dense}(q,c)
-=
-\frac{v_q^\top v_c}
-      {\|v_q\|_2 \|v_c\|_2}.
-```
-
-Plain English: chunks are ranked by the angle between query and chunk embeddings.
-
-The reranker produces the final evidence set:
-
-```math
-E_k(q) =
-\mathrm{topk}_{c \in C(q)}
-s_{rerank}(q,c).
-```
-
-Plain English: BM25 and dense search find candidates; the reranker sorts the best final citations.
-
-### Fixed Query Template
-
-The latest `governor/query_builder.py` commit fixes the retrieval query shape:
-
-```text
-<regime> <symbol> direction=<direction> horizon=<minutes>m vol=<recent_vol_label>
-```
-
-The template is intentionally deterministic so retrieval behavior is testable.
-
-### Citation Invariant
-
-The Pydantic verdict schema enforces:
-
-```math
-decision = pass
-\quad
-\Rightarrow
-\quad
-|citations| \ge 1.
-```
-
-Plain English: if the model says "pass" without citations, the schema downgrades the decision to `insufficient_evidence`.
-
-Tier precedence is conservative:
-
-```math
-decision_{final} = pass
-\quad
-\Leftrightarrow
-\quad
-decision_1 = pass
-\wedge
-decision_2 = pass
-\wedge
-decision_3 \ne veto.
-```
-
-Plain English: any veto or insufficient-evidence result blocks the trade.
-
-## S3 and S4 Execution Status
-
-S3 and S4 now have paper-stage implementations. Their research contract remains:
-
-1. feed adapters normalize public crypto and free-tier equity data;
-2. broker adapters are stage-gated;
-3. S4 is the only layer allowed to place orders;
-4. every decision is written to an append-only audit log;
-5. a file-based kill switch halts trading.
-
-## Paper-Trading and Risk Equations
-
-Position sizing should be volatility-scaled:
-
-```math
-q_t =
-\mathrm{clip}
-(
-    k \frac{\hat{\mu}_{t,h}}{\hat{\sigma}_{t,h}^2 + \epsilon},
-    -q_{max},
-    q_{max}
-).
-```
-
-Plain English: the position grows with expected return and shrinks when estimated risk rises.
-
-Net paper PnL is:
-
-```math
-PnL_{t+1}
-=
-q_t (p_{t+1} - p_t)
-- c |q_t - q_{t-1}|
-- s_t |q_t - q_{t-1}|.
-```
-
-Plain English: the strategy earns or loses from the price move, then pays transaction costs and slippage when it changes position.
-
-The research objective is risk-adjusted, not raw return:
-
-```math
-J(\pi)
-=
-E[R_t^{\pi}]
-- \lambda_v Var(R_t^{\pi})
-- \lambda_d DD(\pi)
-- \lambda_u E[|q_t - q_{t-1}|].
-```
-
-Plain English: a strategy is penalized for volatility, drawdown, and excessive turnover even if gross return is positive.
-
-## Stage Promotion Flow
-
-```text
-paper
-  Alpaca paper + Binance Testnet. All trades simulated.
-  Required evidence: at least 90 days, Sharpe >= 1.0 net, max DD <= 15%.
-
-live_shadow
-  Real broker connected read-only. Orders route to null_broker.py.
-  Required evidence: at least 30 days, paper-vs-real quote match within 0.5%.
-
-live
-  Real money. Hard caps: 2% position, 80% gross, 40% net,
-  3% daily drawdown, 12% cumulative drawdown.
-```
-
-The running process cannot promote itself. Only a human operator edits `.env`, restarts the process, and signs the runbook artifact.
-
-## Reproduction Commands
+and the stacked forecast is $\hat y_i^{\,\text{stack}} = \sum_j \hat a_j\,\hat y_{i,j}$.
+Using only out-of-fold predictions prevents the meta-learner from seeing any base model's
+in-sample fit, so the blend introduces no leakage; the non-negativity constraint forbids
+a base learner from entering with a perverse negative sign.
+
+### 3.6 Probability of Backtest Overfitting (CSCV)
+
+Implemented in
+[`crypto_research/perps/validation.py`](src/quant_research_stack/crypto_research/perps/validation.py).
+Combinatorially symmetric cross-validation (Bailey–López de Prado) splits performance
+into many train/test pairs, ranks the in-sample best configuration, and measures how
+often it underperforms out of sample. With $\bar r$ the out-of-sample rank of the
+in-sample winner,
+
+$$\mathrm{PBO}=\Pr\!\big[\operatorname{logit}(\bar r)\le 0\big].$$
+
+A high PBO means the apparent best strategy is most likely an artifact of selection over
+many trials.
+
+### 3.7 Deflated Sharpe Ratio
+
+Also in
+[`crypto_research/perps/validation.py`](src/quant_research_stack/crypto_research/perps/validation.py).
+The deflated Sharpe ratio corrects a measured Sharpe $\hat{SR}$ for non-normality and
+for the number of trials,
+
+$$\widehat{\mathrm{DSR}}=\Phi\!\left(\frac{(\hat{SR}-SR_0)\sqrt{T-1}}{\sqrt{1-\gamma_3\hat{SR}+\frac{\gamma_4-1}{4}\hat{SR}^2}}\right),$$
+
+where $\gamma_3,\gamma_4$ are the skew and kurtosis of returns and the benchmark
+threshold $SR_0$ is **inflated for the number of strategies tried** (Bailey–López de
+Prado). A strategy passes only if its Sharpe survives this inflation.
+
+### 3.8 Stationary-bootstrap Sharpe CI
+
+A Politis–Romano stationary bootstrap resamples blocks of returns (preserving serial
+dependence) to build a confidence interval on the Sharpe ratio. The pre-registered gate
+requires the **lower bound of the CI to be strictly positive** — a point estimate is not
+enough.
+
+### 3.9 Funding-carry identity and liquidation model
+
+Implemented in
+[`crypto_research/funding/carry.py`](src/quant_research_stack/crypto_research/funding/carry.py).
+For a delta-neutral long-spot / short-perp position, the per-period net return decomposes
+as
+
+$$r_t=\big(r^{\text{spot}}_t-r^{\text{perp}}_t\big)+f_t-c_t,$$
+
+where $r^{\text{spot}}_t-r^{\text{perp}}_t$ is the basis change, $f_t$ is the funding
+the short **receives** when funding is positive, and $c_t$ is transaction plus hedge cost.
+Because the spot leg fully collateralizes the short, capital efficiency requires leverage,
+which introduces an **isolated-margin liquidation** risk on the short perp: an adverse
+intrabar basis move that exhausts posted margin forces liquidation and loss of that
+margin. This tail, not the daily volatility, is what kills the strategy (§4.3).
+
+---
+
+## 4. Experimental Results
+
+### 4.1 S1 tabular predictor
+
+The latest S1 run (`experiments/alpha_s1/20260523-160541`) was trained on
+**4,011,392** rows and evaluated on a permanent **1,008,656**-row holdout with **3 CV
+folds**, on **79** features surviving adversarial (§3.3) and noise-floor (§3.4)
+filtering. The pre-registered milestone gate is **holdout weighted zero-mean R² ≥
+0.012**.
+
+![S1 per-fold per-model weighted zero-mean R²](figures/s1_fold_model_r2.png)
+
+| Model | Holdout weighted zero-mean R² |
+|---|---:|
+| CatBoost | **+0.0062** |
+| Ridge | +0.0039 |
+| LightGBM | +0.0025 |
+| Sequence (1D-CNN) | −0.0007 |
+| XGBoost | −0.0093 |
+| MLP | −0.0094 |
+| **Ensemble (holdout)** | **+0.0055** |
+
+**Verdict: below gate, not released.** The ensemble holdout score of **0.0055** is less
+than half the **0.012** gate. Two base learners (XGBoost, MLP) are *negative* on the
+holdout — worse than predicting zero. The trees and the linear baseline carry a faint,
+real but sub-gate signal; nothing here is deployable. See the
+[S1 implementation plan](docs/superpowers/plans/2026-05-14-quantlab-alpha-s1-implementation.md).
+
+### 4.2 Signal-research ledger
+
+Beyond S1, roughly thirteen independent signal-research branches were opened and closed.
+Every one was killed by a documented mechanism — never by hand-waving. The verdicts
+group into four recurring failure modes: **noise floor**, **subsumed by vol-targeting /
+regime exposure**, **predictive-but-untradable** (markout below cost), and **data-blocked
+/ survivorship-unsafe**.
+
+| Branch | Verdict | Why it failed | Reference |
+|---|---|---|---|
+| OHLCV cross-sectional (6 iterations) | closed | noise floor; PSR/DSR kill the faint holdout flicker | [note](docs/research/2026-05-NEGATIVE-RESULT-OHLCV-ALPHA.md) |
+| VRP index | closed | real but subsumed by HMM regime (orthogonal residual Sharpe ≈ 0) | [intake](docs/research/intake/2026-05-28-vrp-index-v1.md) |
+| HMM single-index | closed | strong static fit but delay-sensitive and refit-unstable | [intake](docs/research/intake/2026-05-28-hmm-single-index-v1.md) |
+| Event-macro FOMC | closed | real + placebo-clean but subsumed by vol-targeting; below gate | [note](docs/research/2026-05-NEGATIVE-RESULT-EVENT-MACRO-FOMC.md) |
+| Microstructure L2 / L1 / tick | closed | predictive but untradable (markout < spread + fee) | [note](docs/research/2026-05-NEGATIVE-RESULT-MICROSTRUCTURE.md) |
+| Futures carry / term-structure | rejected (data) | no native curve available for free | [intake](docs/research/intake/2026-05-30-futures-carry-term-structure-v1.md) |
+| Options-IV cross-sectional | rejected (data) | only free return source is survivorship-biased | [intake](docs/research/intake/2026-05-30-options-iv-features-v1.md) |
+| EDGAR 10-K text features | closed | clean (PIT + survivorship) but annual = too low-frequency | [intake](docs/research/intake/2026-05-30-edgar-10k-text-features-v1.md) |
+| Zero-cost allocators v1 / v2 | DO_NOT_ADVANCE | cleared literal gate but crypto-regime-carried / ETH-concentrated and bootstrap-fragile | [intake](docs/research/intake/2026-05-30-zero-cost-deployable-v1.md) |
+
+The full ledger, the four-wall taxonomy, and the consolidated arc are in the
+[zero-cost alpha search close-out](docs/research/2026-05-ZERO-COST-ALPHA-SEARCH-CLOSEOUT.md)
+and the
+[signal-research program review](docs/research/2026-05-PROGRAM-REVIEW-SIGNAL-RESEARCH.md).
+Outcome: **0 production, 0 paper, 0 live** candidates.
+
+### 4.3 Funding-carry capstone
+
+The freshest and most instructive result is a delta-neutral funding-rate carry: long
+spot / short USDT-M perp on BTC + ETH, collecting the 8h funding that longs persistently
+pay shorts, on free Binance Vision data over **2020-01..2026-04**. It was the first
+branch to *structurally* escape the cost wall (it is held, not a taker bet) and the
+subsumption wall (it is carry, not vol-timing), and the first to clear its data audits.
+
+![Funding-carry equity curve](figures/funding_carry_equity.png)
+
+**Data audit — PASS.** 6,936 funding settlements; a 2,312-row/asset daily carry panel
+with zero missing days; spot Vision-daily reconciled to on-disk 1-minute data to 0.0%.
+Two bugs that *would have fabricated a result* were caught by the harness: an
+exact-timestamp 8h join silently dropped ~45% of settlements (millisecond jitter in
+`calc_time`), and a pooled book annualized 8h data at 365 instead of 1095. Both were
+fixed and regression-tested.
+
+**Backtest — net-positive in 6 of 7 years.** After 10 bps spot + 5 bps perp taker cost,
+8h-marked pooled annual net returns were 2020 **+23.8%**, 2021 **+40.2%**, 2022
+**+2.4%**, 2023 **+8.2%**, 2024 **+13.3%**, 2025 **+5.1%**, 2026 **−0.26%** (partial
+year). The unlevered pooled Sharpe is ≈ **8.6** at ≈ **14%/yr**.
+
+![Funding-carry net return per year](figures/funding_carry_per_year.png)
+
+**The high Sharpe is real, not a marking illusion.** Re-marking the carry on the true
+8h funding-settlement grid (rather than a smoothed daily close) did **not** deflate the
+Sharpe: it moved 8.56 → 8.61. The spot-perp basis is genuinely tight even at 8h
+resolution, so the figure is not a basis-variance artifact. The danger is elsewhere.
+
+![Funding-carry leverage / liquidation stress](figures/funding_carry_leverage_stress.png)
+
+**The real risk is the fat left tail under leverage.** Unlevered, the carry is
+capital-inefficient (100% margin on both legs). Any leverage used to fix that introduces
+short-perp liquidation in crashes. Under an isolated-margin liquidation model the
+stressed pooled returns are **3× → −17%/yr**, **5× → −38%/yr**, **10× → −90%/yr**. This
+is a calm-period Sharpe that does not price its own tail — pennies in front of a
+steamroller.
+
+**Verdict: DO_NOT_ADVANCE.** It fails the pre-registered 2026 regime gate (2026 YTD net
+−0.16% on the daily-close run; −0.26% 8h-marked) and the edge is decaying with crowding
+(2024 +13% → 2025 +5% → 2026 ≈ 0). See the
+[funding-carry negative result](docs/research/2026-05-NEGATIVE-RESULT-FUNDING-CARRY.md),
+the [funding-carry intake](docs/research/intake/2026-05-30-funding-carry-v1.md), and the
+[realism results](reports/signal_research/funding_carry_v1/funding_carry_realism_results.md).
+
+---
+
+## 5. Discussion — the Four Walls
+
+Every failure in this program reduces to one or more of four walls. Only the last is a
+methodology issue; the first three are data-access issues.
+
+1. **Cost wall.** The signal is real but its markout is below realistic transaction cost
+   (all microstructure channels).
+2. **Subsumption wall.** A single-index risk-timing signal is already captured by
+   vol-targeting or regime exposure, leaving ≈ 0 orthogonal residual (VRP, HMM, FOMC,
+   the allocators' equity sleeves).
+3. **Data-access / survivorship wall.** Structurally new channels need entitled or
+   survivorship-safe data unavailable for free (futures curve, options-IV
+   cross-section, 10-Q labels, point-in-time fundamentals).
+4. **Frequency / sample wall.** Clean free data exists but at too low a frequency for
+   robust inference (EDGAR 10-K annual: only a handful of holdout cross-sections).
+
+The funding-carry capstone added a *fifth* pattern that does not reduce to these: a real,
+free, market-neutral carry that is **regime-decaying and tail-dominated under the
+leverage needed to make it efficient**.
+
+**Meta-conclusion: data acquisition is the binding constraint.** Methodology and
+validation are not the bottleneck — the controls work, and they repeatedly rejected
+fragile results before they could mislead. What is missing is information the free tier
+cannot supply. The full argument and the paid-data path are in the
+[zero-cost alpha search close-out](docs/research/2026-05-ZERO-COST-ALPHA-SEARCH-CLOSEOUT.md),
+the [zero-cost constraint note](docs/research/2026-05-30-ZERO-COST-CONSTRAINT.md), and the
+[paid-data acquisition recommendation](docs/research/2026-05-30-PAID-DATA-ACQUISITION-RECOMMENDATION.md).
+
+---
+
+## 6. Reproducibility
+
+The capstone result regenerates in seconds from cached free data:
 
 ```bash
-uv sync --extra dev --extra llm
-huggingface-cli login
-# Place Kaggle token at ~/.kaggle/kaggle.json and accept competition rules.
-
-PYTHONPATH=src uv run python scripts/download_papers.py
-PYTHONPATH=src uv run python scripts/prepare_research_corpus.py
-PYTHONPATH=src uv run python scripts/paper_corpus_to_parquet.py
-PYTHONPATH=src uv run python scripts/paper_corpus_to_instructions.py
-PYTHONPATH=src uv run python scripts/download_hf_artifacts.py --types dataset --max-gb 50
-PYTHONPATH=src uv run python scripts/download_hf_artifacts.py --types model --max-gb 80
-PYTHONPATH=src uv run python scripts/download_kaggle_artifacts.py --unzip
-PYTHONPATH=src uv run python scripts/dedupe_and_verify.py
-
-make full-retrain-s1
+make mvp
 ```
 
-`make full-retrain-s1` runs tests, lint, feature extraction, S1 training, Optuna search, and final reporting.
+`make mvp` runs the funding-carry v1 pipeline, the realism (8h-marked + liquidation)
+pass, and regenerates the four figures embedded above (`figures/*.png`). It prints the
+honest verdict — `funding-carry = DO_NOT_ADVANCE (research_only)` — and writes reports to
+`reports/signal_research/funding_carry_v1/`.
 
-## Testing and Verification
+**Environment.** Dependencies are managed with `uv`; all entry points run with
+`PYTHONPATH=src`.
 
 ```bash
+uv sync --extra dev
 PYTHONPATH=src uv run pytest -q
-uv run ruff check src scripts tests
-uv run mypy src
+ruff check src scripts tests
+mypy src
 ```
 
-The default pytest configuration skips `governor_slow` tests. Those are reserved for integration runs that load local LLM models.
+**Artifact integrity.** Every S1 artifact is hashed under
+[`experiments/alpha_s1/20260523-160541/_artifact_sha256.json`](experiments/alpha_s1/20260523-160541/_artifact_sha256.json),
+so a clean checkout can verify byte-for-byte that the reported numbers come from the
+committed models. **Audit replay**: replaying the append-only audit log must reproduce
+the same decision sequence byte-for-byte (§2).
 
-## Safety Standard
+---
 
-```text
-Kill switch        KILL_TRADING file in repo root halts all trading.
-Audit log          logs/audit/YYYY-MM-DD.jsonl, append-only after rotation.
-Replay invariant   Replaying the audit log must reproduce the same decision sequence.
-Stage gate         QUANTLAB_STAGE controls broker class selection.
-Risk caps          position, gross exposure, net exposure, daily DD, cumulative DD.
-Citation rule      S2 pass verdicts require local paper chunk citations.
-```
+## 7. Limitations & honest disclosures
 
-## Latest Commit Analysis
+- **No deployable alpha exists.** 0 deployable, 0 paper, 0 live strategies. Nothing in
+  this repository is authorized for paper or live trading, and no result here constitutes
+  investment advice.
+- **S1 is below its gate.** Holdout weighted zero-mean R² of 0.0055 vs a 0.012 gate; two
+  base learners are negative on the holdout.
+- **The funding carry is tail-dominated and decaying.** Its high Sharpe is a calm-regime
+  figure; under the leverage needed for capital efficiency it carries a crash-liquidation
+  tail (−17%/−38%/−90% at 3×/5×/10×), and it fails the pre-registered 2026 regime gate as
+  the edge crowds out.
+- **Free-data scope.** Sub-millisecond equity HFT, native futures curves, true options
+  chains, and survivorship-safe equity fundamentals are all out of scope on free tiers.
+- **What would change the answer.** Paid, survivorship-safe data (e.g. Sharadar) would
+  reopen the data-blocked branches; the dormant ingestion scaffold is ready. The
+  feasibility analysis and kill criteria are in the
+  [Sharadar data-purchase feasibility study](docs/research/2026-05-DATA-PURCHASE-FEASIBILITY-SHARADAR.md).
 
-The newest commits indicate that the active development front is S2 Governor infrastructure:
+---
 
-| Commit theme | Meaning for README |
-|---|---|
-| `governor/query_builder.py` | README documents the fixed deterministic retrieval-query template |
-| `governor/retrieval.py` | README documents the BM25 + dense + rerank retrieval cascade |
-| `governor/reranker.py` | README separates retrieval candidates from final evidence ranking |
-| `governor/dense_index.py` | README includes FAISS/cosine dense retrieval math |
-| `governor/bm25_index.py` | README names sparse lexical retrieval as a first-stage evidence source |
-| `governor/corpus.py` | README documents stable chunk IDs and corpus hashing |
-| `governor/signal_schema.py` | README documents the citation invariant and auto-downgrade rule |
-| `alpha_*` scripts and modules | README keeps S1 as the numeric prediction layer and documents training gates |
+## 8. References & repository map
 
-## Limitations
+**Architecture Decision Records** — [`docs/architecture/adrs/`](docs/architecture/adrs/)
+- [ADR 0001 — two-tier tabular / LLM separation](docs/architecture/adrs/0001-two-tier-tabular-llm.md)
+- [ADR 0002 — three-stage promotion gate](docs/architecture/adrs/0002-three-stage-promotion-gate.md)
+- [ADR 0003 — GBNF-constrained LLM output](docs/architecture/adrs/0003-gbnf-constrained-llm-output.md)
+- [ADR 0005 — LLM governor citation requirement](docs/architecture/adrs/0005-llm-governor-citation-requirement.md)
+- [ADR 0010 — fill model and fixed-bps slippage](docs/architecture/adrs/0010-fill-model-and-fixed-bps-slippage.md)
+- [ADR 0014 — kill-switch precedence](docs/architecture/adrs/0014-kill-switch-precedence.md)
 
-- S1 can be benchmarked locally, but a high score is not equivalent to a profitable live strategy.
-- S2 can veto unsupported trades, but it does not prove that approved trades are profitable.
-- S3/S4 are paper-stage modules. They are not live-trading approval, and live broker adapters remain intentionally blocked behind human promotion controls.
-- S4.1 paper-validation reports require valid Alpaca data credentials, S1/S2 artifacts, and S4 fill audit logs before promotion gates should be treated as operational evidence.
-- Free data limits make sub-millisecond equity HFT out of scope.
-- Real-money use requires broker permissions, tax handling, regulatory review, and operator responsibility.
+**Specs** — [`docs/superpowers/specs/`](docs/superpowers/specs/)
+- [Platform design](docs/superpowers/specs/2026-05-14-quantlab-alpha-platform-design.md)
+- [S2 governor design](docs/superpowers/specs/2026-05-16-quantlab-alpha-s2-governor-design.md)
+- [Crypto-perp microstructure design](docs/superpowers/specs/2026-05-26-crypto-perp-microstructure-design.md)
 
-## References
+**Plans** — [`docs/superpowers/plans/`](docs/superpowers/plans/)
+- [S1 implementation plan](docs/superpowers/plans/2026-05-14-quantlab-alpha-s1-implementation.md)
+- [Crypto strategy research loop](docs/superpowers/plans/2026-05-25-crypto-strategy-research-loop.md)
+- [MVP README deliverable](docs/superpowers/plans/2026-05-30-mvp-readme-deliverable.md)
 
-```text
-Master spec: docs/superpowers/specs/2026-05-14-quantlab-alpha-platform-design.md
-S2 spec:     docs/superpowers/specs/2026-05-16-quantlab-alpha-s2-governor-design.md
-S1 plan:     docs/superpowers/plans/2026-05-14-quantlab-alpha-s1-implementation.md
-S2 plan:     docs/superpowers/plans/2026-05-16-quantlab-alpha-s2-governor-implementation.md
-ADRs:        docs/architecture/adrs/
-Runbooks:    docs/runbooks/
-Manifests:   manifests/datasets.yaml manifests/models.yaml manifests/papers.yaml manifests/kaggle.yaml
-```
+**Negative-result notes** — [`docs/research/`](docs/research/)
+- [OHLCV cross-sectional alpha](docs/research/2026-05-NEGATIVE-RESULT-OHLCV-ALPHA.md)
+- [Event-macro FOMC](docs/research/2026-05-NEGATIVE-RESULT-EVENT-MACRO-FOMC.md)
+- [Microstructure L2/L1/tick](docs/research/2026-05-NEGATIVE-RESULT-MICROSTRUCTURE.md)
+- [Funding-carry capstone](docs/research/2026-05-NEGATIVE-RESULT-FUNDING-CARRY.md)
+- [Zero-cost alpha search close-out](docs/research/2026-05-ZERO-COST-ALPHA-SEARCH-CLOSEOUT.md)
+- [Signal-research program review](docs/research/2026-05-PROGRAM-REVIEW-SIGNAL-RESEARCH.md)
 
-## Legal Disclaimer
+**Research intakes** — [`docs/research/intake/`](docs/research/intake/)
+- [VRP index v1](docs/research/intake/2026-05-28-vrp-index-v1.md)
+- [HMM single-index v1](docs/research/intake/2026-05-28-hmm-single-index-v1.md)
+- [Funding-carry v1](docs/research/intake/2026-05-30-funding-carry-v1.md)
+- [Futures carry / term-structure v1](docs/research/intake/2026-05-30-futures-carry-term-structure-v1.md)
+- [Options-IV features v1](docs/research/intake/2026-05-30-options-iv-features-v1.md)
+- [EDGAR 10-K text features v1](docs/research/intake/2026-05-30-edgar-10k-text-features-v1.md)
+- [Zero-cost deployable v1](docs/research/intake/2026-05-30-zero-cost-deployable-v1.md)
 
-This repository is not a regulated investment advisor and produces no investment advice. It is a research system. Real-money trading is solely the operator's responsibility.
+**Runbooks** — [`docs/runbooks/`](docs/runbooks/)
+- [Stage promotion](docs/runbooks/stage_promotion.md)
+- [Kill switch](docs/runbooks/kill_switch.md)
+- [Paper validation methodology](docs/runbooks/paper_validation_methodology.md)
+
+---
+
+## Legal disclaimer
+
+This repository is not a regulated investment advisor and produces no investment advice.
+It is a research system reporting a negative result. Real-money trading is gated behind
+operator-only promotion controls and is solely the operator's responsibility.
