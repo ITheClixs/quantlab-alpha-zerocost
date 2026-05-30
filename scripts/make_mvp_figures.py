@@ -57,7 +57,7 @@ def pooled_equity(net: NDArray[np.float64]) -> NDArray[np.float64]:
     return np.concatenate([[1.0], eq])
 
 
-def pooled_8h_carry() -> "CarryResult":
+def pooled_8h_carry() -> CarryResult:
     """Recompute the pooled BTC+ETH 8h-marked carry from cached free data.
 
     Mirrors scripts/run_funding_carry_realism.py (base costs 10/5/5 bps). Returns a
