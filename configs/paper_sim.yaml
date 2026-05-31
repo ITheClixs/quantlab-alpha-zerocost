@@ -1,0 +1,9 @@
+symbols: [BTCUSDT, ETHUSDT]
+total_notional_usd: 20000      # 1x unlevered, split across legs/assets
+starting_equity_usd: 100000
+half_spread_bps: 1.0
+slippage_bps: 4.0              # ~matches backtest perp/spot taker assumptions
+commission_bps: 1.0
+rebalance_drift_bps: 25.0      # rebalance a leg when it drifts >25bps from target
+poll_interval_s: 10.0
+max_data_gap_seconds: 120      # crypto data-gap kill (CLAUDE.md §11)
