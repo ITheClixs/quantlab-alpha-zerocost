@@ -124,7 +124,8 @@ def main() -> int:
         b_ret = _slice_between(bench.daily_returns, dates, lo, hi)
         if s_ret.size == 0:
             continue
-        s_tot = float(np.prod(1 + s_ret) - 1); b_tot = float(np.prod(1 + b_ret) - 1)
+        s_tot = float(np.prod(1 + s_ret) - 1)
+        b_tot = float(np.prod(1 + b_ret) - 1)
         crises[label] = {
             "strat_return": round(s_tot, 4), "bench_return": round(b_tot, 4),
             "strat_maxdd": round(metrics(s_ret)["max_drawdown"], 4),

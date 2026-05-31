@@ -88,6 +88,7 @@ def verify_live() -> dict:
     result: dict = {}
     try:
         import os
+
         import boto3
         from botocore.config import Config
         for line in open(".env"):

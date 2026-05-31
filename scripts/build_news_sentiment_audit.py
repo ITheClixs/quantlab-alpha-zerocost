@@ -130,7 +130,7 @@ def main() -> int:
         "## EDGAR 10-K",
         f"- {s['edgar']['companies']} unique companies (CIK), {s['edgar']['rows']} filings, "
         f"{s['edgar']['date_min']} → {s['edgar']['date_max']} (annual).",
-        f"- README: 'all SP500 **historical** constituents'. Delisted/merged names present: "
+        "- README: 'all SP500 **historical** constituents'. Delisted/merged names present: "
         + ", ".join(f"{k}={v}" for k, v in s['edgar']['delisted_present'].items())
         + f" → **survivorship-aware: {edgar_surv}** (FRC/SIVB failed in 2023, outside the 2010-2022 window).",
         "",

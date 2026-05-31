@@ -119,7 +119,7 @@ def main() -> int:
         f"- IV universe symbols: {n_iv}",
         f"- **Overlap (mapped): {len(overlap)} ({pct_overlap:.1f}%)** | **Missing: {len(missing)} ({100-pct_overlap:.1f}%)**",
         f"- Missing with special chars (ticker-format issue): **{len(specials)}** → mapping is NOT the cause.",
-        f"- Index ETFs in HexQuant: " + ", ".join(f"{k}={v['in_hq_window']}" for k, v in etf_results.items())
+        "- Index ETFs in HexQuant: " + ", ".join(f"{k}={v['in_hq_window']}" for k, v in etf_results.items())
         + " → **HexQuant is stocks-only; ETF returns must come from the clean SPY/QQQ bars (secondary track).**",
         "",
         "Coverage is only 57% of the IV universe; the gap is survivorship + ETFs, not ticker formatting.",

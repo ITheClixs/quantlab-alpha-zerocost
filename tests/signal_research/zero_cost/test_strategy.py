@@ -8,7 +8,6 @@ from quant_research_stack.signal_research.zero_cost.strategy import (
     InstrumentSeries,
     apply_execution_shift,
     backtest_portfolio,
-    daily_returns,
     trend_on,
     vol_target_weight,
     weeklyize,
@@ -40,7 +39,7 @@ def test_daily_returns_and_vol_target_causal() -> None:
 def test_execution_shift_direction_blocks_lookahead() -> None:
     # returns: day 3 is a -10% crash; a gate that is 0 ON day 3 must, after the
     # t+1 execution shift, only take effect the day AFTER -> it does NOT dodge the crash
-    returns = np.array([0.0, 0.01, 0.01, -0.10, 0.01])
+    np.array([0.0, 0.01, 0.01, -0.10, 0.01])
     raw_weight = np.array([1.0, 1.0, 1.0, 0.0, 1.0])  # "decided at close t"
     held = apply_execution_shift(raw_weight, delay=1)
     # held[3] should equal raw_weight[2] = 1.0 (still long into the crash) -> no look-ahead

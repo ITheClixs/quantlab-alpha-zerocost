@@ -34,7 +34,7 @@ def _synthetic_bars_two_sectors(*, n_days: int, seed: int) -> tuple[pl.DataFrame
         d = d + dt.timedelta(days=1)
     sector_map: dict[str, str] = {}
     rows = []
-    for sector_idx, sector_name in enumerate(["Financials", "Energy"]):
+    for _sector_idx, sector_name in enumerate(["Financials", "Energy"]):
         factor = rng.standard_normal(n_days) * 0.012
         for s in range(15):
             sym = f"{sector_name[:3].upper()}{s:02d}"

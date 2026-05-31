@@ -133,7 +133,7 @@ def main() -> int:
         "", "| year | symbols | rows |", "|---|---:|---:|",
         *[f"| {r['y']} | {r['n_syms']:,} | {r['rows']:,} |" for r in s["per_year"]],
         "",
-        f"- Index ETFs present (directly tradable as the instrument): "
+        "- Index ETFs present (directly tradable as the instrument): "
         + ", ".join(f"{k}={v} rows" for k, v in s["index_etfs_rows"].items()) + f"  → all present: {etf_ok}.",
         f"- Delisted-name probe: {s['delisted_probe']['symbol']} has {s['delisted_probe']['rows']} rows, "
         f"last {s['delisted_probe']['last_date']} (< dataset end {s['date_max']}) → **delisted names are retained**",
