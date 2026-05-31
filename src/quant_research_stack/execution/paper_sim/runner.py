@@ -13,6 +13,7 @@ from quant_research_stack.execution.audit import AuditLog
 from quant_research_stack.execution.paper_sim.config import PaperSimConfig
 from quant_research_stack.execution.paper_sim.funding_accrual import FundingAccrual
 from quant_research_stack.execution.paper_sim.market_data import MarketSnapshot
+from quant_research_stack.execution.paper_sim.reconciliation import ReconReport
 from quant_research_stack.execution.paper_sim.strategy import FundingCarryStrategy
 from quant_research_stack.feeds.market_types import Tick, TickSide, Venue
 
@@ -57,6 +58,9 @@ class CarryLoop:
         self._accrual = FundingAccrual()
         self._positions: dict[str, float] = {}
         self._funding_pnl = 0.0
+        self._cycles = 0
+        self._n_rebalances = 0
+        self._basis: list[float] = []
         snapshot_root.mkdir(parents=True, exist_ok=True)
 
     def positions(self) -> dict[str, float]:
@@ -64,6 +68,14 @@ class CarryLoop:
 
     def funding_pnl(self) -> float:
         return self._funding_pnl
+
+    def report(self) -> ReconReport:
+        """Live-vs-model reconciliation summary (observation-only)."""
+        start = self._cfg.starting_equity_usd
+        return ReconReport(
+            cycles=self._cycles, n_rebalances=self._n_rebalances,
+            funding_pnl=self._funding_pnl, basis_samples=list(self._basis),
+            equity_start=start, equity_end=start + self._funding_pnl)
 
     async def _place(self, intent: OrderIntent, price: float) -> None:
         # NullBroker fills from the FIRST market event; reset deque so this leg prices right.
@@ -85,8 +97,11 @@ class CarryLoop:
             while max_cycles is None or cycle < max_cycles:
                 for symbol in self._cfg.symbols:
                     snap = await self._source(symbol, cycle)
-                    for intent in self._strategy.rebalance_intents(
-                            snap, positions=self._positions, cycle=cycle):
+                    self._basis.append(snap.basis)
+                    intents = self._strategy.rebalance_intents(
+                        snap, positions=self._positions, cycle=cycle)
+                    self._n_rebalances += len(intents)
+                    for intent in intents:
                         await self._place(intent, _leg_price(snap, intent.symbol))
                     fpnl = self._accrual.maybe_settle(snap, positions=self._positions)
                     if fpnl != 0.0:
@@ -96,6 +111,7 @@ class CarryLoop:
                             "perp_mark": snap.perp_mark, "funding_pnl": fpnl,
                             "basis": snap.basis})
                 cycle += 1
+                self._cycles = cycle
         finally:
             self._audit.append("paper_sim_stop",
                                {"cycles": cycle, "funding_pnl": self._funding_pnl,

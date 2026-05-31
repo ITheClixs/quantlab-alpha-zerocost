@@ -35,7 +35,11 @@ async def _run(args: argparse.Namespace) -> None:
         await loop.run(max_cycles=args.max_cycles)
     finally:
         await poller.close()
+    report_path = Path("reports/signal_research/funding_carry_v1/paper_sim_recon.md")
+    report_path.parent.mkdir(parents=True, exist_ok=True)
+    report_path.write_text(loop.report().render() + "\n")
     print(f"done. funding_pnl={loop.funding_pnl():.2f} positions={loop.positions()}")
+    print(f"reconciliation report: {report_path}")
 
 
 def main() -> None:

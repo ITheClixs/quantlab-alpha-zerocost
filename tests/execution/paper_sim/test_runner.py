@@ -43,3 +43,9 @@ async def test_loop_opens_delta_neutral_and_accrues_funding(tmp_path: Path, monk
     assert loop.funding_pnl() > 0.0
     # audit file written
     assert any((tmp_path / "audit").glob("*.jsonl"))
+    # reconciliation report reflects the run (observation-only)
+    rep = loop.report()
+    assert rep.cycles == 2
+    assert rep.n_rebalances >= 2          # at least both legs opened
+    assert rep.funding_pnl == loop.funding_pnl()
+    assert "DO_NOT_ADVANCE" in rep.render()
