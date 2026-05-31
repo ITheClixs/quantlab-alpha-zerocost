@@ -26,3 +26,11 @@ reports/*.csv
 reports/*.parquet
 reports/*.log
 data/validation/
+
+# --- PR hygiene additions ---
+.omx/
+models/governor/*.pkl
+models/governor/*.faiss
+models/governor/*.npy
+reports/**/*.parquet
+**/audit_raw/
