@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+from pathlib import Path
+
+import pytest
+
 from quant_research_stack.signal_research.zero_cost.data import (
     FORBIDDEN_SERIES,
     INSTRUMENTS,
@@ -27,6 +31,10 @@ def test_instruments_are_directly_traded_set() -> None:
 
 
 def test_disk_instrument_loader() -> None:
+    # SPY/QQQ bars live under data/processed/ which is gitignored; skip when the
+    # local corpus is absent (e.g. a clean clone or CI) instead of failing.
+    if not Path(INSTRUMENTS["SPY"]["path"]).exists():
+        pytest.skip("on-disk SPY bars not present (data/processed is gitignored)")
     df = load_instrument("SPY")  # on-disk, no network
     assert df.columns == ["date", "close"]
     assert df.height > 1000
