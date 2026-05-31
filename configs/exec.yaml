@@ -1,0 +1,19 @@
+ingest:
+  s1_predictions_dir: data/live/s1_predictions
+  s2_verdicts_dir: experiments/s2_verdicts_balanced
+  poll_interval_seconds: 0.1
+  pair_window_seconds: 60
+
+position_book:
+  snapshot_root: data/positions
+  snapshot_interval_seconds: 60
+
+audit:
+  root: logs/audit/s4
+  rotation: daily
+  chmod_after_close: true
+
+kill_switch:
+  repo_root_marker: KILL_TRADING
+  poll_interval_seconds: 0.1
+  emergency_snapshot_root: data/snapshots

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 from pathlib import Path
 
@@ -40,7 +41,7 @@ def _finbert_runner(model_dir: Path) -> callable:
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description="Cache FinBERT-style sentiment features for the corpus.")
     p.add_argument("--input-jsonl", default="data/processed/research/research_corpus.jsonl")
-    p.add_argument("--model-dir", default="models/huggingface/ProsusAI__finbert")
+    p.add_argument("--model-dir", default="models/huggingface/hasnain43__bert-stock-sentiment-v1")
     p.add_argument("--output-parquet", default="data/processed/research/finbert_features.parquet")
     p.add_argument("--cache-root", default="data/processed/research/meta_cache")
     p.add_argument("--limit", type=int, default=None)
@@ -54,10 +55,11 @@ def main() -> int:
         for i, line in enumerate(h):
             if args.limit is not None and i >= args.limit:
                 break
-            rec = pl.from_json(line.strip()).to_dict(as_series=False) if line.strip().startswith("{") else None
-            if rec is None:
+            line = line.strip()
+            if not line:
                 continue
-            rows.append({"id": rec["id"][0], "text": rec["text"][0]})
+            rec = json.loads(line)
+            rows.append({"id": rec["id"], "text": rec["text"]})
     if not rows:
         console.print("[red]No rows in input.[/red]")
         return 2

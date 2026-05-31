@@ -42,3 +42,22 @@ def test_ridge_zero_weights_raises() -> None:
         assert "weights" in str(exc).lower()
         return
     raise AssertionError("expected ValueError on zero weights")
+
+
+def test_ridge_save_load_roundtrip(tmp_path) -> None:
+    rng = np.random.default_rng(0)
+    x = rng.standard_normal((200, 8))
+    y = x @ rng.standard_normal(8) + 0.1 * rng.standard_normal(200)
+    w = np.ones(200)
+
+    original = RidgeAlphaModel(RidgeConfig(alpha=1.0))
+    original.fit(x, y, w)
+
+    path = tmp_path / "ridge.joblib"
+    original.save(path)
+    assert path.exists()
+
+    reloaded = RidgeAlphaModel.load(path)
+
+    # Bit-exact: sklearn Ridge is deterministic across save/load.
+    np.testing.assert_array_equal(original.predict(x), reloaded.predict(x))

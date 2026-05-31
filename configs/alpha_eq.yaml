@@ -1,0 +1,52 @@
+# S1-EQ training config — fast_v1 + full_v1 profiles.
+# Spec: docs/superpowers/specs/2026-05-24-quantlab-alpha-s1-eq-equity-adaptation-design.md
+
+data:
+  equity_root: data/processed/equities
+  manifest_path: data/processed/equities/_manifest.json
+  universe: sp500
+  permanent_holdout_fraction: 0.20
+  min_holdout_trading_days: 756              # spec §3.6
+
+features:
+  enable_meta_features: false                # spec §3.3-7
+  noise_seed: 42
+  rolling_windows: [5, 20, 60]
+  momentum_horizons: [1, 2, 5, 10, 20, 60, 120, 252]
+  vix_proxy_fallback: cross_sectional_vol_20 # spec §3.3-6
+
+cv:
+  layout: expanding_window
+  n_folds: 5
+  label_horizon_days: 1
+  purge_safety_buffer: 2
+  rolling_diagnostic:
+    enabled: true
+    train_years: 10
+    valid_years: 2
+
+models:
+  fast_v1: [ridge, lightgbm, xgboost]
+  full_v1: [ridge, lightgbm, xgboost, catboost, mlp, sequence]
+
+stacker:
+  alpha: 1.0e-3
+  prefer_non_negative: true
+  flag_large_negative_threshold: -0.25       # spec §4.5
+
+optuna:
+  enable: true
+  trials:
+    lightgbm: 50
+    xgboost: 30
+    catboost: 30
+    mlp: 20
+    sequence: 20
+    stacker: 30
+
+reproducibility:
+  numpy_seed: 42
+  torch_seed: 42
+  lightgbm_seed: 42
+  xgboost_seed: 42
+  catboost_seed: 42

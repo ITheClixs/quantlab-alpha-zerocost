@@ -10,6 +10,7 @@ from quant_research_stack.alpha.features import (
     add_noise_feature,
     add_rolling_features,
     build_feature_frame,
+    build_training_features,
     no_future_leakage,
 )
 
@@ -90,3 +91,70 @@ def test_build_feature_frame_end_to_end(panel: pl.DataFrame) -> None:
     out = build_feature_frame(panel, cfg, base_features=["feature_00"], date_col="date_id", symbol_col="symbol_id")
     expected = {"feature_00_lag1", "feature_00_roll2_mean", "feature_00_roll2_std", "feature_00_rank_xs", "noise_seed42"}
     assert expected.issubset(set(out.columns))
+
+
+def test_build_training_features_excludes_all_responder_columns() -> None:
+    """Regression test: every responder_X column other than the target is forward-looking
+    and must not appear in the feature set. Violating this leaks the target."""
+    panel_with_all_responders = pl.DataFrame({
+        "date_id": [0, 0, 1, 1, 2, 2, 3, 3],
+        "symbol_id": [1, 2, 1, 2, 1, 2, 1, 2],
+        "time_id": [0, 0, 0, 0, 0, 0, 0, 0],
+        "weight": [1.0] * 8,
+        "partition_id": [0] * 8,
+        "feature_00": [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8],
+        "feature_01": [1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8],
+        # All 9 responder columns — only the target should be allowed; the others must be excluded.
+        **{f"responder_{i}": [0.01 * i] * 8 for i in range(9)},
+    })
+    cfg = FeatureConfig(
+        lag_windows=[1],
+        rolling_windows=[2],
+        include_noise_feature=True,
+        cross_sectional_ranks=False,
+        noise_seed=42,
+    )
+    _, feature_cols = build_training_features(panel_with_all_responders, cfg)
+    forbidden_in_feats = [c for c in feature_cols if c.startswith("responder_")]
+    assert forbidden_in_feats == [], (
+        f"responder_* columns leaked into feature set: {forbidden_in_feats}. "
+        "These are forward-looking returns; including any of them is target leakage."
+    )
+
+
+def test_build_training_features_excludes_ids_and_weight() -> None:
+    panel = pl.DataFrame({
+        "date_id": [0, 1, 2],
+        "symbol_id": [1, 1, 1],
+        "time_id": [0, 0, 0],
+        "weight": [1.0, 1.0, 1.0],
+        "partition_id": [0, 0, 0],
+        "feature_00": [0.1, 0.2, 0.3],
+        "responder_6": [0.0, 0.1, 0.2],
+    })
+    cfg = FeatureConfig(lag_windows=[], rolling_windows=[], include_noise_feature=False, cross_sectional_ranks=False)
+    _, feature_cols = build_training_features(panel, cfg)
+    forbidden = {"date_id", "symbol_id", "time_id", "weight", "partition_id", "responder_6"}
+    assert forbidden.isdisjoint(set(feature_cols)), (
+        f"IDs/weight/target leaked into feature set: {forbidden & set(feature_cols)}"
+    )
+    assert "feature_00" in feature_cols
+
+
+def test_build_training_features_keeps_engineered_columns() -> None:
+    panel = pl.DataFrame({
+        "date_id": [0, 1, 2, 3, 4],
+        "symbol_id": [1, 1, 1, 1, 1],
+        "weight": [1.0] * 5,
+        "feature_00": [0.1, 0.2, 0.3, 0.4, 0.5],
+        "responder_6": [0.0, 0.1, 0.2, 0.3, 0.4],
+    })
+    cfg = FeatureConfig(
+        lag_windows=[1, 2], rolling_windows=[2], include_noise_feature=True,
+        cross_sectional_ranks=True, noise_seed=42,
+    )
+    _, feature_cols = build_training_features(panel, cfg)
+    feature_set = set(feature_cols)
+    assert {"feature_00", "feature_00_lag1", "feature_00_lag2",
+            "feature_00_roll2_mean", "feature_00_roll2_std",
+            "feature_00_rank_xs", "noise_seed42"}.issubset(feature_set)

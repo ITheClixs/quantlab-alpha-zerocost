@@ -1,0 +1,130 @@
+{
+  "name": "options_iv_v1_data_audit",
+  "built_utc": "2026-05-30T08:17:17.435367+00:00",
+  "dataset": "gauss314__options-IV-SP500 / data_IV_USA.csv",
+  "binding_question": "Can options-chain IV support a leakage-safe, tradable research program?",
+  "verdict": "RESEARCH_ONLY_FEATURES",
+  "labels": [
+    "options_features_only",
+    "timestamp_uncertain"
+  ],
+  "stats": {
+    "rows": 3161661,
+    "columns": [
+      "",
+      "symbol",
+      "date",
+      "strikes_spread",
+      "calls_contracts_traded",
+      "puts_contracts_traded",
+      "calls_open_interest",
+      "puts_open_interest",
+      "expirations_number",
+      "DITM_IV",
+      "ITM_IV",
+      "sITM_IV",
+      "ATM_IV",
+      "sOTM_IV",
+      "OTM_IV",
+      "DOTM_IV",
+      "contracts_number",
+      "hv_20",
+      "hv_40",
+      "hv_60",
+      "hv_75",
+      "hv_90",
+      "hv_120",
+      "hv_180",
+      "hv_200",
+      "VIX"
+    ],
+    "n_columns": 26,
+    "date_min": "2019-10-14",
+    "date_max": "2023-07-28",
+    "n_symbols": 3893,
+    "per_year": [
+      {
+        "y": "2019",
+        "n_syms": 3827,
+        "rows": 171263
+      },
+      {
+        "y": "2020",
+        "n_syms": 3836,
+        "rows": 879765
+      },
+      {
+        "y": "2021",
+        "n_syms": 3644,
+        "rows": 858437
+      },
+      {
+        "y": "2022",
+        "n_syms": 3471,
+        "rows": 816685
+      },
+      {
+        "y": "2023",
+        "n_syms": 3254,
+        "rows": 435511
+      }
+    ],
+    "index_etfs_rows": {
+      "SPY": 932,
+      "QQQ": 935,
+      "DIA": 929,
+      "IWM": 937
+    },
+    "delisted_probe": {
+      "symbol": "AABA",
+      "rows": 29,
+      "last_date": "2019-11-25"
+    },
+    "spy_trading_days": 932,
+    "spy_atm_iv_sample": [
+      16.0,
+      15.49,
+      15.58
+    ],
+    "dup_symbol_date": 0,
+    "atm_iv_nulls": 0,
+    "atm_iv_nonpositive": 0,
+    "atm_iv_gt_300": 0,
+    "atm_iv_q": [
+      7.96,
+      38.22,
+      122.75
+    ],
+    "zero_call_volume_rows": 179937,
+    "zero_call_oi_rows": 99897,
+    "key_col_nulls": {
+      "ATM_IV": 0,
+      "DOTM_IV": 0,
+      "DITM_IV": 0,
+      "hv_20": 0,
+      "VIX": 0,
+      "calls_open_interest": 0,
+      "expirations_number": 0
+    }
+  },
+  "chain_structure": {
+    "strikes": false,
+    "expiry_dates": false,
+    "bid_ask": false,
+    "per_contract_prices": false,
+    "expirations_count_only": true,
+    "call_put_volume_oi": true,
+    "iv_supplied": "moneyness_buckets (DITM..DOTM)",
+    "greeks": false,
+    "true_delta_skew": false,
+    "term_structure": false
+  },
+  "labels_legend": [
+    "options_chain_clean",
+    "options_features_only",
+    "survivorship_biased_research_only",
+    "timestamp_uncertain",
+    "liquidity_insufficient",
+    "reject"
+  ]
+}

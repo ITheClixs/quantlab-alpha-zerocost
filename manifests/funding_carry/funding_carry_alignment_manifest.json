@@ -1,0 +1,58 @@
+{
+  "built_utc": "2026-05-30T16:26:49.894582+00:00",
+  "symbols": {
+    "BTCUSDT": {
+      "rows": 2312,
+      "start": "2020-01-01",
+      "end": "2026-04-30",
+      "missing_days": 0,
+      "basis_mean_pct": -0.0146,
+      "basis_abs_p95_pct": 0.0954,
+      "basis_max_abs_pct": 0.7365,
+      "ann_funding_pct_by_year": {
+        "2020": 17.19,
+        "2021": 30.61,
+        "2022": 4.16,
+        "2023": 7.87,
+        "2024": 11.92,
+        "2025": 5.13,
+        "2026": 0.38
+      },
+      "ann_funding_pct_full": 12.17,
+      "funding_rows": 6936,
+      "spot_rows": 3179,
+      "perp_rows": 2312,
+      "spot_crosscheck": {
+        "status": "ok",
+        "overlap_days": 2312,
+        "rel_diff_mean_pct": 0.0,
+        "rel_diff_p99_pct": 0.0,
+        "rel_diff_max_pct": 0.0
+      }
+    },
+    "ETHUSDT": {
+      "rows": 2312,
+      "start": "2020-01-01",
+      "end": "2026-04-30",
+      "missing_days": 0,
+      "basis_mean_pct": -0.008,
+      "basis_abs_p95_pct": 0.1124,
+      "basis_max_abs_pct": 1.0295,
+      "ann_funding_pct_by_year": {
+        "2020": 27.41,
+        "2021": 37.54,
+        "2022": 0.79,
+        "2023": 8.26,
+        "2024": 12.96,
+        "2025": 4.93,
+        "2026": -0.38
+      },
+      "ann_funding_pct_full": 14.5,
+      "funding_rows": 6936,
+      "spot_rows": 3179,
+      "perp_rows": 2312
+    }
+  },
+  "verdict": "PASS",
+  "leak_rule": "funding settled on UTC day D collected by short-perp held through D; basis from simultaneous UTC-midnight closes; P2 applies the decision t / earn t+1 shift"
+}

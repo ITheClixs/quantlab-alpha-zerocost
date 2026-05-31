@@ -1,0 +1,43 @@
+{
+  "pbo_raw_global": 0.0,
+  "pbo_per_profile": {
+    "fixture": 0.0
+  },
+  "pbo_per_family": {},
+  "best_name": "crossectional_momentum_12_1",
+  "best_dsr": 5.163191933124371e-09,
+  "best_psr_zero": 0.5533781308562843,
+  "n_strategies": 4,
+  "selected_tickers": [
+    "BTC-USD",
+    "ETH-USD",
+    "BCH-USD",
+    "BNB-USD",
+    "YFI-USD",
+    "SOL-USD",
+    "LTC-USD",
+    "MKR-USD",
+    "AAVE-USD",
+    "DASH-USD",
+    "ZEC-USD",
+    "AVAX-USD",
+    "ETC-USD",
+    "LINK-USD",
+    "DOT-USD",
+    "NEO-USD",
+    "UNI7083-USD",
+    "EGLD-USD",
+    "EOS-USD",
+    "ATOM-USD",
+    "XRP-USD",
+    "NEAR-USD",
+    "ICP-USD",
+    "KSM-USD",
+    "FIL-USD",
+    "AXS-USD",
+    "MATIC-USD",
+    "ADA-USD",
+    "CRV-USD",
+    "OMG-USD"
+  ]
+}

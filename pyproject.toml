@@ -4,14 +4,19 @@ version = "0.1.0"
 description = "Local quantitative finance dataset, model, and paper-corpus workspace."
 requires-python = ">=3.11"
 dependencies = [
+    "alpaca-py>=0.30.0",
     "catboost>=1.2.0",
     "datasets>=3.0.0",
     "duckdb>=1.0.0",
     "faiss-cpu>=1.8.0",
+    "fredapi>=0.5",
+    "hmmlearn>=0.3",
+    "httpx>=0.27.0",
     "huggingface-hub>=0.30.0",
     "kaggle>=1.6.0",
     "lightgbm>=4.5.0",
     "llama-cpp-python>=0.3.0",
+    "matplotlib>=3.9.0",
     "numpy>=1.26.0",
     "optuna>=3.6.0",
     "pandas>=2.2.0",
@@ -20,6 +25,7 @@ dependencies = [
     "pydantic>=2.0.0",
     "pyarrow>=16.0.0",
     "pypdf>=4.3.0",
+    "python-binance>=1.0.19",
     "pyyaml>=6.0.1",
     "rank-bm25>=0.2.2",
     "requests>=2.32.0",
@@ -27,13 +33,20 @@ dependencies = [
     "scikit-learn>=1.4.0",
     "sentence-transformers>=3.0.0",
     "tqdm>=4.66.0",
+    "websockets>=12.0",
     "xgboost>=2.1.0",
+    "lxml>=6.1.1",
+    "html5lib>=1.1",
+    "beautifulsoup4>=4.14.3",
+    "boto3>=1.43.17",
+    "python-dotenv>=1.2.2",
 ]
 
 [project.optional-dependencies]
 dev = [
     "mypy>=1.11.0",
     "pytest>=8.0.0",
+    "pytest-asyncio>=0.24.0",
     "ruff>=0.5.0",
 ]
 llm = [
@@ -51,8 +64,14 @@ build-backend = "hatchling.build"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "-q -m 'not governor_slow'"
-markers = ["governor_slow: integration tests that load LLM models (skipped by default)"]
+addopts = "-q -m 'not governor_slow and not s3_integration and not s4_integration'"
+markers = [
+    "governor_slow: integration tests that load LLM models (skipped by default)",
+    "s3_integration: feed/broker integration tests that hit live or paper endpoints (skipped by default)",
+    "s4_integration: requires running brokers/feeds (skipped in default run)",
+    "validation_integration: requires Alpaca paper credentials (skipped in default run)",
+]
+asyncio_mode = "auto"
 
 [tool.ruff]
 line-length = 120
@@ -61,3 +80,6 @@ target-version = "py311"
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "UP"]
 ignore = ["E501"]
+
+[tool.mypy]
+ignore_missing_imports = true

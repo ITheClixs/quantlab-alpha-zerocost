@@ -1,0 +1,124 @@
+{
+  "name": "futures_carry_term_structure_v1",
+  "built_utc": "2026-05-29T22:52:06.087922+00:00",
+  "intake": "docs/research/intake/2026-05-30-futures-carry-term-structure-v1.md",
+  "binding_question": "Can we compute futures carry from clean front+next contract prices+expiries, without relying on a single back-adjusted continuous series?",
+  "verdict": "PARTIAL_PASS",
+  "markets": {
+    "ES (e-mini S&P futures)": {
+      "class": "equity_index",
+      "label": "continuous_only",
+      "front": "yes (yfinance ES=F)",
+      "next": "no",
+      "expiry": "no",
+      "note": "continuous front only; usable for trend baselines, NOT carry"
+    },
+    "NQ (e-mini Nasdaq futures)": {
+      "class": "equity_index",
+      "label": "continuous_only",
+      "front": "yes (yfinance NQ=F)",
+      "next": "no",
+      "expiry": "no",
+      "note": "continuous front only"
+    },
+    "CL (WTI crude futures)": {
+      "class": "commodity",
+      "label": "continuous_only",
+      "front": "yes (yfinance CL=F)",
+      "next": "no",
+      "expiry": "no",
+      "note": "continuous front only; dated NYMEX contracts not served by yfinance"
+    },
+    "GC (gold futures)": {
+      "class": "commodity",
+      "label": "continuous_only",
+      "front": "yes (yfinance GC=F)",
+      "next": "no",
+      "expiry": "no",
+      "note": "continuous front only"
+    },
+    "SI/NG/ZC/ZS/ZW (commodity futures)": {
+      "class": "commodity",
+      "label": "continuous_only",
+      "front": "partial (yfinance =F)",
+      "next": "no",
+      "expiry": "no",
+      "note": "continuous front at best; no curve"
+    },
+    "Rates futures (ZN/ZB/ZF)": {
+      "class": "rates",
+      "label": "reject",
+      "front": "weak/none",
+      "next": "no",
+      "expiry": "no",
+      "note": "no clean free source for the curve in this environment"
+    },
+    "FX futures (6E/6J/6B)": {
+      "class": "fx",
+      "label": "reject",
+      "front": "weak/none",
+      "next": "no",
+      "expiry": "no",
+      "note": "no clean free source for the curve"
+    },
+    "Massive us_futures_* flat files": {
+      "class": "all",
+      "label": "reject",
+      "front": "catalog-only",
+      "next": "catalog-only",
+      "expiry": "catalog-only",
+      "note": "session/minute/trades/quotes per-contract data EXISTS in catalogue (2017-2024) but GetObject=403 (paid entitlement); not downloadable"
+    },
+    "VXX/VXZ (VIX term-structure ETNs)": {
+      "class": "vol_proxy",
+      "label": "proxy_not_native_futures",
+      "front": "VXX (short-term VIX futures)",
+      "next": "VXZ (mid-term)",
+      "expiry": "embedded (not exposed)",
+      "note": "ETN price embeds VIX-futures roll yield; clean free history; term-structure SLOPE proxy, NOT native front/next prices"
+    },
+    "USO/USL (WTI oil curve ETFs)": {
+      "class": "commodity_proxy",
+      "label": "proxy_not_native_futures",
+      "front": "USO (front WTI)",
+      "next": "USL (12-month ladder)",
+      "expiry": "embedded (not exposed)",
+      "note": "USO/USL relationship reflects WTI curve shape; clean free history; proxy, NOT native curve"
+    },
+    "UNG (natgas ETF)": {
+      "class": "commodity_proxy",
+      "label": "proxy_not_native_futures",
+      "front": "UNG (front natgas)",
+      "next": "none",
+      "expiry": "embedded",
+      "note": "single front proxy; contango bleed only"
+    }
+  },
+  "carry_formula": {
+    "native_intended": "carry_t = ln(F_front_t / F_next_t) * (365 / (expiry_next - expiry_front in days))",
+    "sign_convention": "positive => backwardation (front > next) => positive roll yield to a long holder",
+    "annualization": "365 / (calendar days between front and next expiry)",
+    "contracts_used": "front and first deferred (next) contract; raw (unadjusted) contract prices",
+    "missing_next_handling": "no carry signal on dates lacking a clean next-contract price",
+    "near_expiry_handling": "enforce min_days_to_expiry on the front (e.g. 5 trading days); roll before front expiry; never compute carry from an expiring front inside the threshold",
+    "leakage_rule": "signal at date t uses only contracts and expiries known at date t; carry computed from RAW prices BEFORE any back-adjustment",
+    "proxy_intended": "term-structure SLOPE proxy = ln(P_mid / P_short) e.g. ln(VXZ/VXX) or ln(USL/USO); labeled proxy_not_native_futures; NOT a native roll yield"
+  },
+  "cost_model": {
+    "native_futures": "NOT applicable in v1 (no native data). Reference: ES ~0.25-tick spread + ~$2-4/contract commission; CL ~1-tick; roll cost ~1 spread/roll.",
+    "etf_proxies": "VXX/VXZ/USO ~1-2 bps spread, ~0 commission (liquid); USL/UNG slightly wider. 2x cost stress + 1-bar delay stress feasible.",
+    "verdict": "native cost model cannot be exercised (no native data); proxy cost model is feasible -> proxy markets are research-only at best."
+  },
+  "live_verification": {
+    "massive_futures_get": "403",
+    "yfinance_proxy_VXZ_rows": 5
+  },
+  "labels_legend": [
+    "curve_clean",
+    "continuous_only",
+    "proxy_not_native_futures",
+    "metadata_incomplete",
+    "research_only",
+    "reject"
+  ]
+}

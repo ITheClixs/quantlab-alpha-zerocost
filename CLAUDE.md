@@ -294,11 +294,16 @@ predictions.parquet
 metrics.json      weighted_zero_mean_r2 >= 0.012 on holdout
 feature_importance.parquet
 cv_folds.json
+feature_cols.json ordered list + sha256
+_artifact_sha256.json  sha256 over every artifact above
 models/
   ridge.joblib
   lightgbm.txt
+  lightgbm.config.json
   xgboost.json
+  xgboost.config.json
   catboost.cbm
+  catboost.config.json
   mlp.pt
   sequence.pt
   stacker.joblib

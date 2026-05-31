@@ -3,6 +3,14 @@ __pycache__/
 *.py[cod]
 .DS_Store
 
+# Secrets — NEVER commit
+.env
+.env.*
+!.env.example
+*.secret
+credentials.json
+secrets/
+
 # Heavy artifacts are reproducible from manifests.
 data/raw/
 data/processed/
@@ -17,3 +25,12 @@ reports/*.jsonl
 reports/*.csv
 reports/*.parquet
 reports/*.log
+data/validation/
+
+# --- PR hygiene additions ---
+.omx/
+models/governor/*.pkl
+models/governor/*.faiss
+models/governor/*.npy
+reports/**/*.parquet
+**/audit_raw/

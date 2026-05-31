@@ -1,0 +1,11 @@
+{
+  "value": 0.05292675369433405,
+  "params": {
+    "num_leaves": 210,
+    "max_depth": 10,
+    "learning_rate": 0.006374677881986455,
+    "feature_fraction": 0.6573387635366837,
+    "bagging_fraction": 0.9094493379723054
+  },
+  "n_trials": 30
+}

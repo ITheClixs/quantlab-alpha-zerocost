@@ -96,3 +96,27 @@ def build_feature_frame(
     if cfg.include_noise_feature:
         out = add_noise_feature(out, seed=cfg.noise_seed)
     return out
+
+
+# Columns that MUST NEVER appear in a training feature set.
+# - IDs and weight are obvious.
+# - Every `responder_*` column is a forward-looking return at some horizon. Including any
+#   responder_X other than the chosen target leaks the target itself (the responders are
+#   highly correlated). This violates CLAUDE.md rule #2 "Do not use future data in features".
+_FIXED_RESERVED = frozenset({"date_id", "symbol_id", "time_id", "weight", "partition_id"})
+
+
+def build_training_features(
+    df: pl.DataFrame, cfg: FeatureConfig, date_col: str = "date_id", symbol_col: str = "symbol_id"
+) -> tuple[pl.DataFrame, list[str]]:
+    """Build engineered features and return (frame, feature_cols) with leakage guards.
+
+    `feature_cols` is the list of columns safe to feed to a model: base `feature_*` columns,
+    their engineered derivatives (lags, rolling stats, cross-sectional ranks), and the noise
+    feature. NEVER includes any `responder_*` column or IDs.
+    """
+    base_features = [c for c in df.columns if c.startswith("feature_")]
+    built = build_feature_frame(df, cfg, base_features=base_features, date_col=date_col, symbol_col=symbol_col)
+    reserved = set(_FIXED_RESERVED) | {c for c in built.columns if c.startswith("responder_")}
+    feature_cols = [c for c in built.columns if c not in reserved]
+    return built, feature_cols

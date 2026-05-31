@@ -1,0 +1,6 @@
+{
+  "corpus_sha": "e13dbe1ebe79a7c7db382d0ec2eb12c3cbf1729139f064ecfc82ec7ad33e628f",
+  "n_chunks": 1581,
+  "embedding_model_id": "FinLang/finance-embeddings-investopedia",
+  "vector_dim": 768
+}

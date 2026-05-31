@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Protocol
+from typing import Any, Protocol
 
 
 @dataclass(frozen=True)
@@ -37,7 +37,7 @@ class CrossEncoderReranker:
 
     def __init__(self, model_dir: str | Path) -> None:
         self._model_dir = Path(model_dir)
-        self._model = None
+        self._model: Any | None = None
 
     def _load(self) -> None:
         if self._model is None:
@@ -47,6 +47,7 @@ class CrossEncoderReranker:
 
     def rerank(self, query: str, candidates: Iterable[RerankCandidate]) -> list[RerankCandidate]:
         self._load()
+        assert self._model is not None
         cand_list = list(candidates)
         if not cand_list:
             return []

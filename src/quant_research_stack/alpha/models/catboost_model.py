@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+import json
+from dataclasses import asdict, dataclass
+from pathlib import Path
 
 import numpy as np
 from catboost import CatBoostRegressor, Pool
@@ -49,3 +51,22 @@ class CatBoostAlphaModel:
 
     def predict(self, x: NDArray[np.float64]) -> NDArray[np.float64]:
         return np.asarray(self._estimator.predict(x), dtype=np.float64)
+
+    def save(self, path: Path) -> None:
+        path = Path(path)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        self._estimator.save_model(str(path))
+        sidecar = path.parent / "catboost.config.json"
+        sidecar.write_text(json.dumps(asdict(self.config), indent=2, sort_keys=True))
+
+    @classmethod
+    def load(cls, path: Path) -> CatBoostAlphaModel:
+        path = Path(path)
+        sidecar = path.parent / "catboost.config.json"
+        if not sidecar.exists():
+            raise FileNotFoundError(f"missing sidecar config: {sidecar}")
+        cfg_dict = json.loads(sidecar.read_text())
+        inst = cls(CatBoostConfig(**cfg_dict))
+        inst._estimator = CatBoostRegressor()
+        inst._estimator.load_model(str(path))
+        return inst

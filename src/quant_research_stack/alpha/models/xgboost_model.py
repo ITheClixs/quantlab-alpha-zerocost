@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+import json
+from dataclasses import asdict, dataclass
+from pathlib import Path
 
 import numpy as np
 import xgboost as xgb
@@ -55,3 +57,25 @@ class XGBoostAlphaModel:
         if self._booster is None:
             raise RuntimeError("call fit() first")
         return np.asarray(self._booster.predict(xgb.DMatrix(x)), dtype=np.float64)
+
+    def save(self, path: Path) -> None:
+        path = Path(path)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        if self._booster is None:
+            raise RuntimeError("cannot save un-fitted XGBoostAlphaModel")
+        self._booster.save_model(str(path))
+        sidecar = path.parent / "xgboost.config.json"
+        sidecar.write_text(json.dumps(asdict(self.config), indent=2, sort_keys=True))
+
+    @classmethod
+    def load(cls, path: Path) -> XGBoostAlphaModel:
+        path = Path(path)
+        sidecar = path.parent / "xgboost.config.json"
+        if not sidecar.exists():
+            raise FileNotFoundError(f"missing sidecar config: {sidecar}")
+        cfg_dict = json.loads(sidecar.read_text())
+        inst = cls(XGBoostConfig(**cfg_dict))
+        booster = xgb.Booster()
+        booster.load_model(str(path))
+        inst._booster = booster
+        return inst

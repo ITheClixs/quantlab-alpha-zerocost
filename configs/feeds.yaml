@@ -1,0 +1,23 @@
+# Adapter constructors and recording paths.
+
+recorder:
+  root: data/live/parquet
+  flush_every_n_events: 1024
+  flush_every_seconds: 5.0
+  keep_raw: false
+
+adapters:
+  - venue: binance
+    impl: BinanceWS
+    symbols: [BTCUSDT, ETHUSDT]
+    channels: [aggTrade]
+  - venue: coinbase
+    impl: CoinbaseWS
+    symbols: [BTC-USD, ETH-USD]
+    channels: [matches, ticker]
+  - venue: alpaca
+    impl: AlpacaREST
+    symbols: [SPY, QQQ, AAPL]
+    interval_minutes: 15
+    poll_offset_seconds: 5
+    credentials_path: ~/.alpaca/paper_keys.json

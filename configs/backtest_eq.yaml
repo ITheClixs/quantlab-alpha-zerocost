@@ -1,0 +1,52 @@
+# S1-EQ backtest config — standard + audit sensitivity packs (spec §5.14).
+universe: sp500
+focused_basket_config: configs/eq_focused_basket.yaml
+
+execution:
+  fill: open                                  # headline; spec §5.3
+  adv_participation_pct_headline: 0.01
+  adv_participation_pct_sensitivity: 0.03
+  adv_floor_dollars: 1_000_000
+  gross_target_headline: 1.0
+  q_quantile_headline: 0.10
+  q_quantile_sweep: [0.05, 0.10, 0.20]
+  min_long_full_universe: 10
+  min_short_full_universe: 10
+  min_long_focused_basket: 5
+  min_short_focused_basket: 5
+  max_single_name_weight_frac_of_gross: 0.05
+
+cost:
+  commission_bps_one_way: 0.5
+  roll_spread_cap_bps: 50
+  tiered_fallback_bps:
+    easy: 5
+    general: 15
+    hard: 50
+  pre_decimalization_cutoff: "2001-04-09"
+  pre_decimalization_multiplier_fallback: 2.5
+  pre_decimalization_multiplier_roll: 1.5
+
+borrow:
+  stress_multipliers: [1.0, 2.0, 3.0]
+
+financing:
+  rates_when_gross_gt_1: [0.0, 0.02, 0.05]
+
+sensitivity:
+  standard_pack:
+    borrow: [1.0, 3.0]
+    fill: [open, hlc3_proxy]
+    q: [0.05, 0.10]
+    gross: [1.0]
+  audit_pack:
+    borrow: [1.0, 2.0, 3.0]
+    fill: [open, hlc3_proxy, close]
+    adv_participation_pct: [0.01, 0.03]
+    gross: [0.5, 1.0, 2.0]
+
+reporting:
+  cohorts: [full_universe, focused_basket]
+  rolling_spy_beta_window: 60
+  monthly_returns: true
+  annual_returns: true

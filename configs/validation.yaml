@@ -1,0 +1,17 @@
+window:
+  min_trading_days: 30
+  rolling_window_days: 14
+
+thresholds:
+  hit_rate_min: 0.53
+  sharpe_min: 1.0
+  max_daily_dd_pct: 0.05
+  governor_block_rate_max: 0.50
+
+data:
+  forward_return_source: alpaca_bars
+  horizon_alignment: ceil_to_next_bar
+
+artifacts:
+  daily_report_dir: docs/validation
+  per_signal_parquet_dir: data/validation

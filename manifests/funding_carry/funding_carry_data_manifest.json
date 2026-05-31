@@ -1,0 +1,67 @@
+{
+  "name": "funding_carry_data_manifest",
+  "built_utc": "2026-05-30T16:10:43.156474+00:00",
+  "verdict": "PASS",
+  "funding": {
+    "BTCUSDT": {
+      "coverage": {
+        "rows": 6936,
+        "start": "2020-01-01 00:00:00+00:00",
+        "end": "2026-04-30 16:00:00+00:00",
+        "settlements_per_day": 3.0,
+        "built_utc": "2026-05-30T16:11:48.183904+00:00"
+      },
+      "annualized_full": 0.1217,
+      "annualized_by_year": {
+        "2020": 0.1719,
+        "2021": 0.3061,
+        "2022": 0.0416,
+        "2023": 0.0787,
+        "2024": 0.1192,
+        "2025": 0.0513,
+        "2026": 0.0038
+      }
+    },
+    "ETHUSDT": {
+      "coverage": {
+        "rows": 6936,
+        "start": "2020-01-01 00:00:00+00:00",
+        "end": "2026-04-30 16:00:00+00:00",
+        "settlements_per_day": 3.0,
+        "built_utc": "2026-05-30T16:13:01.889481+00:00"
+      },
+      "annualized_full": 0.145,
+      "annualized_by_year": {
+        "2020": 0.2741,
+        "2021": 0.3754,
+        "2022": 0.0079,
+        "2023": 0.0826,
+        "2024": 0.1296,
+        "2025": 0.0493,
+        "2026": -0.0038
+      }
+    }
+  },
+  "spot_perp": {
+    "btc_spot_on_disk": true,
+    "perp_ohlcv_on_disk": true,
+    "eth_spot_source": "free (Binance Vision spot klines / yfinance ETH-USD) \u2014 fetch in P1",
+    "perp_price_source": "free (Binance Vision futures/um klines; 123olp on disk)",
+    "basis_source": "free (Binance Vision markPriceKlines + premiumIndexKlines)"
+  },
+  "timestamp_rule": "funding settles every 8h; realized rate known at settlement t; signal uses funding<=t, earns the next settlement (t+1 interval) -> leak-safe.",
+  "universe": "BTCUSDT, ETHUSDT perps \u2014 never delisted -> survivorship-clean (cross-sectional top-N deferred).",
+  "cost_model": {
+    "perp_taker_bps_one_way": 5.0,
+    "spot_taker_bps_one_way": 10.0,
+    "note": "delta-neutral carry = long spot / short perp; cost paid at entry/exit only, funding earned each 8h held -> NOT a per-trade taker bet (escapes the microstructure cost wall)."
+  },
+  "labels_legend": [
+    "funding_clean",
+    "spot_clean",
+    "perp_clean",
+    "basis_clean",
+    "research_only",
+    "reject"
+  ]
+}

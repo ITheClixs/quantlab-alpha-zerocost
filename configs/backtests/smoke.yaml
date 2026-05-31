@@ -1,0 +1,22 @@
+# Smoke backtest config — 1 hour of recorded BinanceWS BTCUSDT, buy and hold.
+
+replayer:
+  root: data/live/parquet
+  venue: binance
+  symbols: [BTCUSDT]
+  start_utc: 2026-05-15T00:00:00Z
+  end_utc:   2026-05-15T01:00:00Z
+  speed: 0.0
+
+fill_model:
+  commission_bps: 1.0
+  slippage_bps: 2.0
+  half_spread_bps: 1.0
+  fill_latency_ms: 50
+  reject_if_notional_above_pct_adv: null
+  partial_fill_max_pct_of_book: 0.10
+
+starting_cash: 100000.0
+strategy_name: buy_and_hold
+strategy_params: {}
+metrics_horizon_minutes: 5

@@ -1,0 +1,21 @@
+limits:
+  max_per_symbol_pct: 0.02
+  max_gross_exposure_pct: 0.30
+  base_notional_per_trade_pct: 0.005
+  max_orders_per_minute: 10
+
+drawdown:
+  daily_realized_dd_kill_pct: 0.05
+  cumulative_dd_kill_pct: 0.15
+
+freshness:
+  crypto_max_gap_seconds: 120
+  equity_max_gap_seconds: 1800
+
+reconciliation:
+  interval_seconds: 60
+  max_diff_bps: 1.0
+
+stage_overrides:
+  live:
+    cap_multiplier_first_30d: 0.50

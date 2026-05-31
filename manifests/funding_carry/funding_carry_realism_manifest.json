@@ -1,0 +1,140 @@
+{
+  "built_utc": "2026-05-30T17:04:11.098526+00:00",
+  "status": "research_only \u2014 no paper, no live",
+  "costs_bps": {
+    "spot_taker": 10.0,
+    "perp_taker": 5.0,
+    "slippage": 5.0
+  },
+  "comparison": {
+    "daily_close_illusion": {
+      "pooled_sharpe": 8.56,
+      "pooled_ann_return_pct": 13.94,
+      "pooled_ann_vol_pct": 1.53,
+      "pooled_max_dd_pct": -1.68
+    },
+    "honest_8h": {
+      "pooled_sharpe": 8.61,
+      "pooled_ann_return_pct": 13.92,
+      "pooled_ann_vol_pct": 1.52,
+      "pooled_max_dd_pct": -1.6
+    }
+  },
+  "honest_per_asset": {
+    "BTCUSDT": {
+      "sharpe": 7.367389302319235,
+      "ann_return": 0.12689187323159268,
+      "ann_vol": 0.01623390191432291,
+      "max_drawdown": -0.02289221269722841,
+      "calmar": 5.543014775804335,
+      "total_return": 1.1312526917054
+    },
+    "ETHUSDT": {
+      "sharpe": 7.677848410866041,
+      "ann_return": 0.15148043154588353,
+      "ann_vol": 0.018394029722411734,
+      "max_drawdown": -0.018611427105792333,
+      "calmar": 8.139108875683107,
+      "total_return": 1.4435102624964333
+    }
+  },
+  "honest_pooled_per_year": {
+    "2020": {
+      "sharpe": 8.095,
+      "ann_return_pct": 23.76,
+      "total_pct": 23.83,
+      "days": 1098
+    },
+    "2021": {
+      "sharpe": 15.311,
+      "ann_return_pct": 40.18,
+      "total_pct": 40.18,
+      "days": 1095
+    },
+    "2022": {
+      "sharpe": 2.866,
+      "ann_return_pct": 2.38,
+      "total_pct": 2.38,
+      "days": 1095
+    },
+    "2023": {
+      "sharpe": 11.786,
+      "ann_return_pct": 8.16,
+      "total_pct": 8.16,
+      "days": 1095
+    },
+    "2024": {
+      "sharpe": 16.109,
+      "ann_return_pct": 13.26,
+      "total_pct": 13.3,
+      "days": 1098
+    },
+    "2025": {
+      "sharpe": 12.123,
+      "ann_return_pct": 5.09,
+      "total_pct": 5.09,
+      "days": 1095
+    },
+    "2026": {
+      "sharpe": -1.322,
+      "ann_return_pct": -0.79,
+      "total_pct": -0.26,
+      "days": 360
+    }
+  },
+  "bootstrap_sharpe": {
+    "ci_lower_95": 3.278,
+    "ci_upper_95": 5.095
+  },
+  "liquidation_tail": {
+    "BTCUSDT": {
+      "max_adverse_dbasis_pct": 46.95,
+      "p999_adverse_dbasis_pct": 21.627,
+      "p99_adverse_dbasis_pct": 10.709,
+      "liq_events": {
+        "3x": 5,
+        "5x": 10,
+        "10x": 93
+      }
+    },
+    "ETHUSDT": {
+      "max_adverse_dbasis_pct": 276.611,
+      "p999_adverse_dbasis_pct": 28.713,
+      "p99_adverse_dbasis_pct": 14.355,
+      "liq_events": {
+        "3x": 5,
+        "5x": 25,
+        "10x": 191
+      }
+    }
+  },
+  "liquidation_stressed_pooled": {
+    "3x": {
+      "sharpe": -0.4745295842127343,
+      "ann_return": -0.16998728400210483,
+      "ann_vol": 0.28381650883844206,
+      "max_drawdown": -0.758991465071739,
+      "calmar": -0.22396468448566526,
+      "total_return": -0.6927705601925459,
+      "n_liquidations": 10.0
+    },
+    "5x": {
+      "sharpe": -1.4959616018817488,
+      "ann_return": -0.37842775657127026,
+      "ann_vol": 0.2868019993142624,
+      "max_drawdown": -0.9547317915493871,
+      "calmar": -0.3963707503205047,
+      "total_return": -0.9508045480771292,
+      "n_liquidations": 35.0
+    },
+    "10x": {
+      "sharpe": -5.167483812162825,
+      "ann_return": -0.8959734295101085,
+      "ann_vol": 0.4194328637093889,
+      "max_drawdown": -0.9999994054058773,
+      "calmar": -0.8959739622509606,
+      "total_return": -0.9999994052293515,
+      "n_liquidations": 284.0
+    }
+  }
+}

@@ -1,0 +1,67 @@
+[
+  {
+    "prefix": "global_crypto",
+    "n_keys_listed": 0,
+    "sample_keys": [],
+    "earliest_key": "",
+    "latest_key": "",
+    "sample_file_key": "",
+    "sample_file_size_bytes": 0,
+    "sample_file_rows": 0,
+    "sample_file_columns": [],
+    "sample_file_first_rows": [],
+    "error": "ClientError: An error occurred (403) when calling the HeadObject operation: Forbidden"
+  },
+  {
+    "prefix": "global_forex",
+    "n_keys_listed": 0,
+    "sample_keys": [],
+    "earliest_key": "",
+    "latest_key": "",
+    "sample_file_key": "",
+    "sample_file_size_bytes": 0,
+    "sample_file_rows": 0,
+    "sample_file_columns": [],
+    "sample_file_first_rows": [],
+    "error": "ClientError: An error occurred (403) when calling the HeadObject operation: Forbidden"
+  },
+  {
+    "prefix": "us_indices",
+    "n_keys_listed": 0,
+    "sample_keys": [],
+    "earliest_key": "",
+    "latest_key": "",
+    "sample_file_key": "",
+    "sample_file_size_bytes": 0,
+    "sample_file_rows": 0,
+    "sample_file_columns": [],
+    "sample_file_first_rows": [],
+    "error": "ClientError: An error occurred (403) when calling the HeadObject operation: Forbidden"
+  },
+  {
+    "prefix": "us_options_opra",
+    "n_keys_listed": 0,
+    "sample_keys": [],
+    "earliest_key": "",
+    "latest_key": "",
+    "sample_file_key": "",
+    "sample_file_size_bytes": 0,
+    "sample_file_rows": 0,
+    "sample_file_columns": [],
+    "sample_file_first_rows": [],
+    "error": "ClientError: An error occurred (403) when calling the HeadObject operation: Forbidden"
+  },
+  {
+    "prefix": "us_stocks_sip",
+    "n_keys_listed": 0,
+    "sample_keys": [],
+    "earliest_key": "",
+    "latest_key": "",
+    "sample_file_key": "",
+    "sample_file_size_bytes": 0,
+    "sample_file_rows": 0,
+    "sample_file_columns": [],
+    "sample_file_first_rows": [],
+    "error": "ClientError: An error occurred (403) when calling the HeadObject operation: Forbidden"
+  }
+]

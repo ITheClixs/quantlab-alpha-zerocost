@@ -1,0 +1,65 @@
+# signal_research top-level configuration.
+# Spec: docs/superpowers/specs/2026-05-26-signal-research-enhanced-benchmark-design.md
+
+data:
+  long_history:
+    start: "2005-01-01"
+    end: null               # null = today
+    cache_root: data/processed/signal_research/long_history
+  hf_datasets:
+    cache_root: data/cache/huggingface
+    research_only_default: true     # §2.6, FinBERT ladder default
+  fred:
+    cache_root: data/cache/fred
+    series: [DGS10, T10Y2Y, DTWEXBGS, DCOILWTICO, GOLDAMGBD228NLBM]
+  cboe_proxies:
+    tickers: ["^VIX", "^VVIX", "^SKEW", "^GVZ", "^OVX", "^VXN"]
+    cache_root: data/processed/signal_research/cboe
+  crypto:
+    tickers: ["BTCUSDT", "ETHUSDT"]
+    cache_root: data/processed/signal_research/crypto
+
+profiles:
+  - sp500
+  - nasdaq
+  - crypto
+  - futures_proxy
+
+methodology:
+  cpcv:
+    n_partitions: 8
+    purge_days: 5
+    embargo_days: 5
+  bootstrap:
+    n_resamples: 10000
+    block_length: null          # null = T^(1/3)
+    seed: 42
+  pbo:
+    n_partitions: 16
+    sample_combinations: 20000
+  dsr:
+    confidence_threshold_real_edge: 0.95
+
+success_gates:
+  research_pass:
+    point_sharpe_min: 1.5
+    dsr_min: 0.5
+    pbo_profile_max: 0.25
+    pbo_profile_preferred_max: 0.10
+    bootstrap_lower_sharpe_min: 0.0
+    cost_stress_multiplier: 2.0
+    max_drawdown_min: -0.20
+    calmar_preferred_min: 1.0
+    calmar_weak_max: 0.5
+    min_trades_single_asset: 200
+    min_trades_cross_sectional: 500
+    min_active_days: 252
+    min_oos_calendar_years: 3
+    concentration:
+      max_single_quarter_pnl_frac: 0.50
+      max_single_day_pnl_frac: 0.25
+      max_single_trade_pnl_frac: 0.20
+      max_single_asset_pnl_frac: 0.35
+  promotion_eligible:
+    bootstrap_lower_sharpe_high_confidence: 1.0
+    bootstrap_lower_sharpe_exceptional: 1.5

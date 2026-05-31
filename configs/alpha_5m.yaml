@@ -1,0 +1,70 @@
+data:
+  jane_street_root: data/raw/huggingface/TnnnT0326__Jane_Street_Competition
+  preprocessed_alt_root: data/raw/kaggle/datasets/saurabhshahane__jane-street-preprocessed-train
+  synthetic_root: data/raw/kaggle/datasets/christoffer__synthetic-jane-street-dataset
+  permanent_holdout_fraction: 0.20
+  target_column: responder_6
+  weight_column: weight
+  group_column: date_id
+  max_rows: 5000000
+
+cv:
+  n_folds: 3
+  purge_days: 5
+  embargo_days: 5
+  random_seed: 42
+
+features:
+  lag_windows: [1, 5, 20]
+  rolling_windows: [5, 20]
+  cross_sectional_ranks: false
+  include_noise_feature: true
+
+models:
+  ridge:
+    alpha: 1.0
+  # Optuna-tuned (30 trials × 3 folds × 1.5M rows, leak-fixed) → CV R² 0.0529 vs the
+  # default-config CV R² ~0.044 in fold 1 → 20% relative improvement. Tuned params favor
+  # wider trees (210 leaves), bounded depth (10), much lower LR (0.0064), smaller
+  # feature_fraction (0.66), higher bagging_fraction (0.91). Report at
+  # reports/alpha_optuna_lgb_clean.json.
+  lightgbm:
+    num_leaves: 210
+    max_depth: 10
+    learning_rate: 0.006374677881986455
+    n_estimators: 2000
+    early_stopping_rounds: 100
+    feature_fraction: 0.6573387635366837
+    bagging_fraction: 0.9094493379723054
+  xgboost:
+    max_depth: 6
+    learning_rate: 0.05
+    n_estimators: 800
+    early_stopping_rounds: 50
+    tree_method: hist
+  catboost:
+    depth: 8
+    learning_rate: 0.05
+    n_estimators: 800
+    early_stopping_rounds: 50
+  mlp:
+    hidden_dims: [256, 128]
+    dropout: 0.3
+    learning_rate: 0.001
+    batch_size: 4096
+    max_epochs: 12
+    patience: 3
+    mixed_precision: true
+  sequence:
+    kernel_sizes: [3, 5]
+    n_filters: 32
+    dropout: 0.1
+    learning_rate: 0.0005
+    batch_size: 4096
+    max_epochs: 5
+    patience: 2
+    random_state: 42
+
+stacker_alpha: 0.001
+streaming: true
+max_rows_streaming: 5000000

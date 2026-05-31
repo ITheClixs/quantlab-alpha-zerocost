@@ -1,0 +1,65 @@
+[
+  {
+    "date": "2024-04-01",
+    "file_url": "https://data.binance.vision/data/spot/daily/aggTrades/BTCUSDT/BTCUSDT-aggTrades-2024-04-01.zip",
+    "file_sha256": "d266bb2e03a425254c14dae837b3b683fc99a8aad0c94dc5b530c84502ca4ae3",
+    "row_count": 1489577,
+    "schema": [
+      "agg_trade_id",
+      "price",
+      "quantity",
+      "first_trade_id",
+      "last_trade_id",
+      "timestamp_raw",
+      "is_buyer_maker",
+      "is_best_match",
+      "timestamp_ms"
+    ],
+    "earliest_ts_ms": 1711929600000,
+    "latest_ts_ms": 1712015999998,
+    "duration_hours": 23.999999444444445,
+    "timestamp_unit": "ms"
+  },
+  {
+    "date": "2024-08-05",
+    "file_url": "https://data.binance.vision/data/spot/daily/aggTrades/BTCUSDT/BTCUSDT-aggTrades-2024-08-05.zip",
+    "file_sha256": "ba052cf0c7e0079457a3c358740ceaf5808ef3ee40246bec02a3187aa2a322d7",
+    "row_count": 5280704,
+    "schema": [
+      "agg_trade_id",
+      "price",
+      "quantity",
+      "first_trade_id",
+      "last_trade_id",
+      "timestamp_raw",
+      "is_buyer_maker",
+      "is_best_match",
+      "timestamp_ms"
+    ],
+    "earliest_ts_ms": 1722816000182,
+    "latest_ts_ms": 1722902399993,
+    "duration_hours": 23.9999475,
+    "timestamp_unit": "ms"
+  },
+  {
+    "date": "2026-05-22",
+    "file_url": "https://data.binance.vision/data/spot/daily/aggTrades/BTCUSDT/BTCUSDT-aggTrades-2026-05-22.zip",
+    "file_sha256": "590753b52e0ec8c659bad6338395664879b73dfe7f606c7d0e51edc72dacd320",
+    "row_count": 670571,
+    "schema": [
+      "agg_trade_id",
+      "price",
+      "quantity",
+      "first_trade_id",
+      "last_trade_id",
+      "timestamp_raw",
+      "is_buyer_maker",
+      "is_best_match",
+      "timestamp_ms"
+    ],
+    "earliest_ts_ms": 1779408000118,
+    "latest_ts_ms": 1779494399872,
+    "duration_hours": 23.999931666666665,
+    "timestamp_unit": "us"
+  }
+]
