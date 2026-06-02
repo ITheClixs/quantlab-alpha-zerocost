@@ -7,7 +7,7 @@ TRAIN_MAX_ROWS ?=
 STREAMING ?=
 OPTUNA_ARGS ?= --n-trials 200
 
-.PHONY: test lint type extract train optuna full-retrain-s1 verify-loader clean-experiments
+.PHONY: test lint type check-docs extract train optuna full-retrain-s1 verify-loader clean-experiments
 
 test:
 	$(PY) pytest -q
@@ -17,6 +17,12 @@ lint:
 
 type:
 	uv run mypy src
+
+# Validate the research-paper README/report: relative links resolve and no
+# GitHub-disallowed MathJax macros are used (e.g. \operatorname).
+check-docs:
+	$(PY) python scripts/check_readme_links.py
+	$(PY) python scripts/check_readme_math.py
 
 extract:
 	$(PY) python $(EXTRACT)
