@@ -3,7 +3,7 @@
 **Date:** 2026-05-30
 **Status:** Decision document — triggered by the 10-Q audit `REJECT_ON_DATA`.
 **Author:** QuantLab research
-**Builds on:** `docs/research/2026-05-30-PROGRAM-REVIEW-DATA-CONSTRAINT.md`
+**Builds on:** `reports/2026-05-30-PROGRAM-REVIEW-DATA-CONSTRAINT.md`
 **Program `/goal`:** find taker-tradable alpha for QuantLab.
 
 ## 0. Why this document exists
