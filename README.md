@@ -177,7 +177,7 @@ Zhu, 2017) splits performance into many train/test pairs, ranks the in-sample be
 configuration, and measures how often it underperforms out of sample. With $\bar r$ the
 out-of-sample rank of the in-sample winner,
 
-$$\mathrm{PBO}=\Pr\!\big[\operatorname{logit}(\bar r)\le 0\big].$$
+$$\mathrm{PBO}=\Pr\!\big[\mathrm{logit}(\bar r)\le 0\big].$$
 
 A high PBO means the apparent best strategy is most likely an artifact of selection over
 many trials.
@@ -443,16 +443,16 @@ construction, near the end of its half-life.
 ### 6.3 Detectability: free low-frequency data cannot resolve real-sized IC (sample wall)
 
 The standard error of a cross-sectional information coefficient over $N$ independent
-observations is $\operatorname{SE}(\widehat{\operatorname{IC}})\approx N^{-1/2}$, so its
-$t$-statistic is $t=\widehat{\operatorname{IC}}\,\sqrt{N}$. The smallest IC distinguishable
+observations is $\mathrm{SE}(\widehat{\mathrm{IC}})\approx N^{-1/2}$, so its
+$t$-statistic is $t=\widehat{\mathrm{IC}}\,\sqrt{N}$. The smallest IC distinguishable
 from zero at significance $\alpha$ is therefore
 
 $$
-\operatorname{IC}_{\min}(N)=\frac{z_{1-\alpha/2}}{\sqrt{N}}.
+\mathrm{IC}_{\min}(N)=\frac{z_{1-\alpha/2}}{\sqrt{N}}.
 $$
 
 A *real* cross-sectional IC is small — Qlib's published benchmarks sit at
-$\operatorname{IC}\approx 0.03$. Resolving it at $p<0.05$ needs
+$\mathrm{IC}\approx 0.03$. Resolving it at $p<0.05$ needs
 $N\ge (1.96/0.03)^2\approx 4.3\times 10^{3}$ independent cross-sections. EDGAR 10-K annual
 panels supply $N$ in the low hundreds at most — **structurally undetectable**, regardless
 of method. Tick/daily panels supply $N$ large enough to detect it, but those signals then
