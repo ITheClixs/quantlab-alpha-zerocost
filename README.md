@@ -2,8 +2,8 @@
 
 [![Stage](https://img.shields.io/badge/QUANTLAB__STAGE-paper-orange)](docs/runbooks/stage_promotion.md)
 [![Kill switch](https://img.shields.io/badge/kill__switch-armed-red)](docs/runbooks/kill_switch.md)
-[![Tests](https://img.shields.io/badge/tests-passing-brightgreen)](#6-reproducibility)
-[![Alpha](https://img.shields.io/badge/alpha-none--deployable%20(research--only)-lightgrey)](#7-limitations--honest-disclosures)
+[![Tests](https://img.shields.io/badge/tests-passing-brightgreen)](#7-reproducibility)
+[![Alpha](https://img.shields.io/badge/alpha-none--deployable%20(research--only)-lightgrey)](#8-limitations--honest-disclosures)
 
 > **Honest headline.** This program produced **0 deployable, 0 paper, and 0 live
 > strategies.** That is not the failure of the project — it *is* the result. The
@@ -30,7 +30,11 @@ together with the honest finding that **under a zero-cost data constraint no
 taker-tradable alpha survives out-of-sample validation**. Across an S1 tabular
 predictor and roughly thirteen closed signal-research branches culminating in a
 delta-neutral funding-carry capstone, the binding constraint is shown to be the
-information set, not the modelling method. This repository is **research-only**: it
+information set, not the modelling method. We further show (§6) that this conclusion is
+*predicted* by four independent strands of the literature — post-publication anomaly
+decay, backtest-overfitting theory, the Grossman–Stiglitz/Berk–Green equilibrium, and
+the empirical failure of crowdsourced retail alpha — and that no public quantitative
+system survives the same validation gate. This repository is **research-only**: it
 reports **0 deployable strategies** and authorizes no paper or live trading.
 
 ---
@@ -121,7 +125,7 @@ $$d < a_j - p \quad \vee \quad d > b_j + e.$$
 validation set). The **embargo** additionally drops a buffer of rows immediately after
 each validation block, blocking serial-correlation leakage across the split. Combinatorial
 purged cross-validation (CPCV) generalizes this to multiple held-out groups so the
-overfitting estimate (§3.6) sees many train/test recombinations.
+overfitting estimate (§3.6) sees many train/test recombinations (López de Prado, 2018).
 
 ### 3.2 Weighted zero-mean R²
 
@@ -168,10 +172,10 @@ a base learner from entering with a perverse negative sign.
 
 Implemented in
 [`crypto_research/perps/validation.py`](src/quant_research_stack/crypto_research/perps/validation.py).
-Combinatorially symmetric cross-validation (Bailey–López de Prado) splits performance
-into many train/test pairs, ranks the in-sample best configuration, and measures how
-often it underperforms out of sample. With $\bar r$ the out-of-sample rank of the
-in-sample winner,
+Combinatorially symmetric cross-validation (CSCV; Bailey, Borwein, López de Prado &
+Zhu, 2017) splits performance into many train/test pairs, ranks the in-sample best
+configuration, and measures how often it underperforms out of sample. With $\bar r$ the
+out-of-sample rank of the in-sample winner,
 
 $$\mathrm{PBO}=\Pr\!\big[\operatorname{logit}(\bar r)\le 0\big].$$
 
@@ -188,13 +192,14 @@ for the number of trials,
 $$\widehat{\mathrm{DSR}}=\Phi\!\left(\frac{(\hat{SR}-SR_0)\sqrt{T-1}}{\sqrt{1-\gamma_3\hat{SR}+\frac{\gamma_4-1}{4}\hat{SR}^2}}\right),$$
 
 where $\gamma_3,\gamma_4$ are the skew and kurtosis of returns and the benchmark
-threshold $SR_0$ is **inflated for the number of strategies tried** (Bailey–López de
-Prado). A strategy passes only if its Sharpe survives this inflation.
+threshold $SR_0$ is **inflated for the number of strategies tried** (Bailey & López de
+Prado, 2014; see §6.1 for the closed form). A strategy passes only if its Sharpe
+survives this inflation.
 
 ### 3.8 Stationary-bootstrap Sharpe CI
 
-A Politis–Romano stationary bootstrap resamples blocks of returns (preserving serial
-dependence) to build a confidence interval on the Sharpe ratio. The pre-registered gate
+A stationary bootstrap (Politis & Romano, 1994) resamples blocks of returns (preserving
+serial dependence) to build a confidence interval on the Sharpe ratio. The pre-registered gate
 requires the **lower bound of the CI to be strictly positive** — a point estimate is not
 enough.
 
@@ -347,7 +352,170 @@ the [zero-cost constraint note](docs/research/2026-05-30-ZERO-COST-CONSTRAINT.md
 
 ---
 
-## 6. Reproducibility
+## 6. Related Work — The Public-Alpha Landscape and External Corroboration
+
+A natural objection is that public repositories or published systems already achieve
+what this program could not. A multi-source survey (companion report:
+[`reports/2026-06-02-COMPETITIVE-LANDSCAPE-PUBLIC-QUANT.md`](reports/2026-06-02-COMPETITIVE-LANDSCAPE-PUBLIC-QUANT.md))
+finds the opposite: **no public artifact contains a deployable, costed, capacity-aware,
+gate-surviving alpha.** The visible ecosystem is *infrastructure* (backtest/execution
+engines such as [NautilusTrader](https://nautilustrader.io/), backtrader, Zipline),
+*research pipelines* ([Microsoft Qlib](https://github.com/microsoft/qlib); Yang et al.,
+2020, whose published benchmarks report ranking ICs of $\approx 0.03\text{–}0.05$ —
+**not** net-of-cost PnL), *education* (RSI/MACD/pairs cookbooks), or *unaudited,
+self-reported* metrics
+(the 2025–26 LLM-agent wave). None publishes the costed, purged-and-embargoed,
+PBO/DSR-gated holdout that §3 mandates.
+
+This section formalizes *why* — and shows that four independent strands of the academic
+and industry record reproduce this program's four-wall thesis (§5). Each subsection pairs
+a closed-form model with the wall it explains; all figures are regenerated by
+[`scripts/make_landscape_figures.py`](scripts/make_landscape_figures.py) from the
+equations alone (no market data), so they are fully reproducible.
+
+### 6.1 Selection bias: why a "successful" public backtest is usually the best of many nulls
+
+Let $N$ candidate configurations be evaluated against the same history, each with a
+Sharpe estimate $\widehat{SR}_n$. Even when **every** strategy has *zero* true skill
+($SR=0$), the *maximum* sampled Sharpe grows without bound in $N$. For estimates with
+cross-trial standard deviation $\sigma_{SR}$, the Bailey–López de Prado expected maximum is
+
+$$
+SR_0 \;=\; \mathbb{E}\!\left[\max_{1\le n\le N}\widehat{SR}_n\right]
+\;\approx\;
+\sigma_{SR}\left[(1-\gamma)\,\Phi^{-1}\!\Big(1-\tfrac{1}{N}\Big)
+\;+\;\gamma\,\Phi^{-1}\!\Big(1-\tfrac{1}{N\,e}\Big)\right],
+$$
+
+where $\gamma\approx 0.5772$ is the Euler–Mascheroni constant and $\Phi^{-1}$ is the
+standard-normal quantile function. The Deflated Sharpe Ratio (§3.7) sets its benchmark to
+exactly this $SR_0$, so a strategy "passes" only if it beats the best a zero-skill search
+would have produced by chance.
+
+![Expected best Sharpe under the null vs. number of trials](figures/landscape_max_sharpe_vs_trials.png)
+
+The practical consequence: with $\approx 45$ variants on five years of daily data, the
+probability that the best backtest is overfit already exceeds $50\%$ (Bailey, Borwein,
+López de Prado & Zhu, 2017). The proliferation of >300 published "factors" is itself a
+multiple-testing artifact (Harvey, Liu & Zhu, 2016). Public cookbooks and AutoML/LLM
+factor-miners report the *top* configuration **without deflation**; this program reports
+the deflated, multiple-testing-aware number — which is why their curves look like alpha
+and ours look like a closed channel.
+
+### 6.2 Decay: published, liquid signals are competed to zero (cost & subsumption walls)
+
+McLean & Pontiff (2016) tracked 97 cross-sectional predictors from publication into live
+markets. Decomposing the in-sample return $r_{\text{IS}}$ into a statistical-bias
+component (overfitting, revealed out-of-sample) and an investor-learning component
+(crowding, revealed post-publication):
+
+$$
+r_{\text{post}}
+\;\approx\;
+r_{\text{IS}}-\big(\underbrace{0.26}_{\text{overfitting}}+\underbrace{0.32}_{\text{crowding}}\big)\,r_{\text{IS}}
+\;=\;0.42\,r_{\text{IS}},
+$$
+
+i.e. roughly a quarter of the edge was never real and a further third is arbitraged away
+once the signal is public (McLean & Pontiff, 2016). Critically, the **liquid,
+easy-to-arbitrage** anomalies — precisely those tradable from free OHLCV — decay the
+*most*, exactly as the limits-of-arbitrage view predicts (Shleifer & Vishny, 1997).
+
+![Post-publication anomaly decay](figures/landscape_publication_decay.png)
+
+The crowding limit is the Grossman–Stiglitz / "Red-Queen" equilibrium: if a fraction
+$\varphi$ of capital runs the same signal, net alpha decays as
+
+$$
+\alpha_{\text{net}}(\varphi)=\alpha_0\,(1-\varphi)^{k},\qquad k\ge 1,\qquad
+\lim_{\varphi\to 1}\alpha_{\text{net}}(\varphi)=0,
+$$
+
+is the Grossman–Stiglitz impossibility result (Grossman & Stiglitz, 1980) and Lo's
+adaptive-markets view of strategy proliferation and decay (Lo, 2004); LLM-assisted
+research drives $\varphi\to 1$ faster by homogenizing the candidate set
+([arXiv:2605.23905](https://arxiv.org/html/2605.23905), 2026). This is the program's
+**subsumption wall** in closed form: a public, liquid, easily-described signal is, by
+construction, near the end of its half-life.
+
+![Crowding decay to zero alpha](figures/landscape_crowding_decay.png)
+
+### 6.3 Detectability: free low-frequency data cannot resolve real-sized IC (sample wall)
+
+The standard error of a cross-sectional information coefficient over $N$ independent
+observations is $\operatorname{SE}(\widehat{\operatorname{IC}})\approx N^{-1/2}$, so its
+$t$-statistic is $t=\widehat{\operatorname{IC}}\,\sqrt{N}$. The smallest IC distinguishable
+from zero at significance $\alpha$ is therefore
+
+$$
+\operatorname{IC}_{\min}(N)=\frac{z_{1-\alpha/2}}{\sqrt{N}}.
+$$
+
+A *real* cross-sectional IC is small — Qlib's published benchmarks sit at
+$\operatorname{IC}\approx 0.03$. Resolving it at $p<0.05$ needs
+$N\ge (1.96/0.03)^2\approx 4.3\times 10^{3}$ independent cross-sections. EDGAR 10-K annual
+panels supply $N$ in the low hundreds at most — **structurally undetectable**, regardless
+of method. Tick/daily panels supply $N$ large enough to detect it, but those signals then
+hit the cost wall (§6.4).
+
+![Minimum detectable IC vs. sample size](figures/landscape_min_detectable_ic.png)
+
+### 6.4 The cost wall, formally
+
+Let a signal have gross information ratio $\widehat{IR}_{\text{gross}}$, per-period
+turnover $\tau$, round-trip cost $c$ (spread + fee + impact), and per-period return
+volatility $\sigma_r$. The cost-adjusted information ratio is
+
+$$
+\widehat{IR}_{\text{net}}
+=\widehat{IR}_{\text{gross}}-\frac{\tau\,c}{\sigma_r}.
+$$
+
+When the per-trade **markout is below $c$**, $\widehat{IR}_{\text{net}}<0$ for *any*
+$\widehat{IR}_{\text{gross}}$. This is exactly the microstructure outcome in §4.2: a
+genuine gross IC of $0.45$ on tick trade-flow that is nonetheless untradable once the
+bid–ask bounce and fee are paid. The surviving public edge hides where $c$ is largest
+(illiquid names), which is the worst place for a free-data taker.
+
+### 6.5 The capacity wall (why the retail micro-cap edge does not scale)
+
+The Berk–Green (2004) rational-markets mechanism implies decreasing returns to scale:
+alpha net of price impact falls in deployed capital $C$,
+
+$$
+\alpha_{\text{net}}(C)=\alpha_0-\kappa\,C^{\beta},\qquad \beta\ge \tfrac12,
+$$
+
+so a capacity-constrained anomaly a small operator *can* access (micro-caps) has an
+optimal size $C^\star$ too small to support a fund, while the strategies that *do* scale
+have $\alpha_0$ already arbitraged. Quantopian's collapse is this inequality made
+concrete: free survivorship-safe minute data and hundreds of thousands of researchers
+still failed to yield *scalable* alpha, because — in the widely-reported post-mortem —
+*"the idea is only 10%; execution, risk, portfolio construction and transaction-cost
+analysis are the 90%"* (industry post-mortem, BrokersDB, 2026).
+
+### 6.6 Synthesis: public "success" and our "0 deployable" are the same fact
+
+| Quantity reported | Public repos / cookbooks | This program |
+|---|---|---|
+| Sharpe | gross, **un-deflated**, best-of-$N$ ($\approx SR_0$ inflation) | net, deflated against $SR_0$ |
+| Sample | in-sample / favourable window | purged-embargoed OOS holdout |
+| Costs | often omitted | $\tau c/\sigma_r$ subtracted (§6.4) |
+| Capacity | ignored | required (§6.5) |
+| Decay | unmodelled | $(1-\varphi)^k$ crowding assumed (§6.2) |
+
+Reading the same market through stricter instruments yields a stricter — and more
+honest — number. The external record (anomaly decay, backtest-overfitting theory,
+Quantopian, pod-shop practice, LLM homogenization) does not contradict this program's
+result; it **predicts** it. The corollary stands: **the binding constraint is the
+information set, not the method** — the genuine winners win on entitled data, execution
+infrastructure, capacity-constrained niches, and portfolio construction across many
+*decayed* sleeves, none of which a free-data solo operator can manufacture from a better
+model.
+
+---
+
+## 7. Reproducibility
 
 The capstone result regenerates in seconds from cached free data:
 
@@ -378,7 +546,7 @@ the same decision sequence byte-for-byte (§2).
 
 ---
 
-## 7. Limitations & honest disclosures
+## 8. Limitations & honest disclosures
 
 - **No deployable alpha exists.** 0 deployable, 0 paper, 0 live strategies. Nothing in
   this repository is authorized for paper or live trading, and no result here constitutes
@@ -398,7 +566,7 @@ the same decision sequence byte-for-byte (§2).
 
 ---
 
-## 8. References & repository map
+## 9. References & repository map
 
 **Architecture Decision Records** — [`docs/architecture/adrs/`](docs/architecture/adrs/)
 - [ADR 0001 — two-tier tabular / LLM separation](docs/architecture/adrs/0001-two-tier-tabular-llm.md)
@@ -439,6 +607,35 @@ the same decision sequence byte-for-byte (§2).
 - [Stage promotion](docs/runbooks/stage_promotion.md)
 - [Kill switch](docs/runbooks/kill_switch.md)
 - [Paper validation methodology](docs/runbooks/paper_validation_methodology.md)
+
+**Program reports** — [`reports/`](reports/)
+- [Program review — the data-entitlement constraint](reports/2026-05-30-PROGRAM-REVIEW-DATA-CONSTRAINT.md)
+- [Competitive landscape — public & published quant systems](reports/2026-06-02-COMPETITIVE-LANDSCAPE-PUBLIC-QUANT.md) (basis of §6)
+
+### Academic references (§3 methodology, §6 corroboration)
+
+Cited in author–year form throughout §3 and §6.
+
+- Bailey, D. H., Borwein, J. M., López de Prado, M., & Zhu, Q. J. (2017). The Probability of Backtest Overfitting. *Journal of Computational Finance*, 20(4), 39–69. https://doi.org/10.21314/JCF.2016.322
+- Bailey, D. H., & López de Prado, M. (2014). The Deflated Sharpe Ratio: Correcting for Selection Bias, Backtest Overfitting, and Non-Normality. *Journal of Portfolio Management*, 40(5), 94–107. https://doi.org/10.3905/jpm.2014.40.5.094
+- Berk, J. B., & Green, R. C. (2004). Mutual Fund Flows and Performance in Rational Markets. *Journal of Political Economy*, 112(6), 1269–1295. https://doi.org/10.1086/424739
+- Grossman, S. J., & Stiglitz, J. E. (1980). On the Impossibility of Informationally Efficient Markets. *American Economic Review*, 70(3), 393–408.
+- Harvey, C. R., Liu, Y., & Zhu, H. (2016). … and the Cross-Section of Expected Returns. *Review of Financial Studies*, 29(1), 5–68. https://doi.org/10.1093/rfs/hhv059
+- Lo, A. W. (2004). The Adaptive Markets Hypothesis. *Journal of Portfolio Management*, 30(5), 15–29.
+- López de Prado, M. (2018). *Advances in Financial Machine Learning*. Hoboken, NJ: Wiley. (purged/embargoed CV, CPCV — §3.1, §3.6)
+- McLean, R. D., & Pontiff, J. (2016). Does Academic Research Destroy Stock Return Predictability? *Journal of Finance*, 71(1), 5–32. https://doi.org/10.1111/jofi.12365
+- Politis, D. N., & Romano, J. P. (1994). The Stationary Bootstrap. *Journal of the American Statistical Association*, 89(428), 1303–1313. https://doi.org/10.1080/01621459.1994.10476870
+- Shleifer, A., & Vishny, R. W. (1997). The Limits of Arbitrage. *Journal of Finance*, 52(1), 35–55. https://doi.org/10.1111/j.1540-6261.1997.tb03807.x
+- Yang, X., Liu, W., Zhou, D., Bian, J., & Liu, T.-Y. (2020). Qlib: An AI-oriented Quantitative Investment Platform. *arXiv:2009.11189*. https://arxiv.org/abs/2009.11189
+
+### Secondary & industry sources (§6 background)
+
+Non-peer-reviewed; used for industry context and corroboration, not as primary evidence.
+
+- AI-driven alpha decay under algorithmic monoculture — [arXiv:2605.23905](https://arxiv.org/html/2605.23905) (2026); [IBKR Quant: LLMs and the shortening shelf life of copyable alpha](https://www.interactivebrokers.com/campus/ibkr-quant-news/llms-and-the-shortening-shelf-life-of-copyable-alpha/).
+- Backtest-bias surveys — [The three ways backtests lie](https://tesseraalpha.com/methodology/backtesting-survivorship-lookahead); [Backtest overfitting & live performance](https://quantalpha.co/en/blog/backtest-overfitting-and-live-performance).
+- Crowdsourced-alpha & crowding case studies — [The rise and fall of Quantopian](https://brokersdb.com/learn/quantopian-history-legacy-review); [Factor decay & pod shops](https://youngandcalculated.substack.com/p/factor-decay-is-real-how-published).
+- Platforms surveyed — [Microsoft Qlib](https://github.com/microsoft/qlib) · [NautilusTrader](https://nautilustrader.io/) · [awesome-systematic-trading](https://github.com/paperswithbacktest/awesome-systematic-trading).
 
 ---
 
