@@ -2,10 +2,6 @@ from __future__ import annotations
 
 import polars as pl
 
-from quant_research_stack.signal_research.training.meta_label_walk_forward import (
-    MetaLabelWalkForwardConfig,
-    train_meta_label_walk_forward,
-)
 from quant_research_stack.signal_research.fingerprint_vwap.fingerprint import (
     build_fingerprint_features,
     fingerprint_columns,
@@ -13,6 +9,10 @@ from quant_research_stack.signal_research.fingerprint_vwap.fingerprint import (
 from quant_research_stack.signal_research.fingerprint_vwap.vwap import (
     daily_vwap_proxy,
     vwap_primary_position,
+)
+from quant_research_stack.signal_research.training.meta_label_walk_forward import (
+    MetaLabelWalkForwardConfig,
+    train_meta_label_walk_forward,
 )
 
 

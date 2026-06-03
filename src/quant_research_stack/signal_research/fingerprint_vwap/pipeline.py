@@ -85,6 +85,32 @@ def run_fingerprint_vwap_meta(*, panel: pl.DataFrame, spec: FingerprintVwapSpec)
     return out
 
 
+def render_report(*, result: dict[str, Any], verdict: dict[str, Any], spec_repr: str) -> str:
+    elig = result.get("eligibility", {})
+    lines = [
+        "# Fingerprint-VWAP Meta-Labeling v1 — Result",
+        "",
+        "**Status:** research_only. Not investment advice. No paper. No live.",
+        "",
+        f"**Verdict:** {verdict['verdict']}",
+        "",
+        "## Eligibility (primary VWAP entry)",
+        f"- eligible: {elig.get('eligible')}  reason: {elig.get('reason') or 'n/a'}",
+        f"- primary net Sharpe: {elig.get('primary_net_sharpe'):.3f}  events: {elig.get('event_count')}",
+        "",
+        "## Meta-labeling (net of cost)",
+        f"- meta net Sharpe: {result.get('meta_net_sharpe', float('nan')):.3f}",
+        f"- baseline (take-every-entry) net Sharpe: {result.get('baseline_net_sharpe', float('nan')):.3f}",
+        f"- **lift**: {result.get('lift', float('nan')):.3f}",
+        f"- deflated Sharpe: {verdict.get('deflated_sharpe')}",
+        f"- failed gates: {verdict.get('failed') or 'none'}",
+        "",
+        "## Spec",
+        f"`{spec_repr}`",
+    ]
+    return "\n".join(lines)
+
+
 def gate_verdict(
     *,
     meta_net_sharpe: float,
