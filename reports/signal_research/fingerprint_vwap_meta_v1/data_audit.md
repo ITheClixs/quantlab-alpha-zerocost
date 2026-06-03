@@ -1,8 +1,11 @@
 # Fingerprint-VWAP Meta-Labeling v1 — Data Audit Checklist
 
-**Status: PENDING**
+**Status: PENDING (survivorship checks §1 effectively FAIL on the smoke universe).**
 The checks below must be executed against the real fetched panel before trusting
-any pipeline run. The smoke run was DEFERRED (see note at the bottom).
+any pipeline run. A 5-ticker smoke run WAS executed on a non-point-in-time
+(survivorship-biased) universe — see `smoke/report.md` and `VERDICT.md`. Because §1
+is not satisfied, that run's Sharpe/lift figures are informative-but-not-clean; the
+binding finding (negative lift) is documented in `VERDICT.md`.
 
 ---
 
