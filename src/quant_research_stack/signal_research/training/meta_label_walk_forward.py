@@ -54,6 +54,8 @@ class MetaLabelWalkForwardConfig:
     cost_bps_one_way: float = 1.0
     seed: int = 42
     triple_barrier: TripleBarrierConfig = field(default_factory=TripleBarrierConfig)
+    primary_position_col: str | None = None
+    extra_feature_columns: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -111,21 +113,26 @@ def _feature_frame(panel: pl.DataFrame, config: MetaLabelWalkForwardConfig) -> p
             ).alias("future_return_horizon"),
         ]
     )
-    df = df.with_columns(
-        [
-            pl.col("log_return_1").rolling_std(window_size=20, min_samples=20).over("symbol").alias("realized_vol_20"),
-            (
-                (pl.col("volume") - pl.col("volume").rolling_mean(window_size=20, min_samples=20).over("symbol"))
-                / (pl.col("volume").rolling_std(window_size=20, min_samples=20).over("symbol") + 1e-12)
-            ).alias("volume_z_20"),
+    base = [
+        pl.col("log_return_1").rolling_std(window_size=20, min_samples=20).over("symbol").alias("realized_vol_20"),
+        (
+            (pl.col("volume") - pl.col("volume").rolling_mean(window_size=20, min_samples=20).over("symbol"))
+            / (pl.col("volume").rolling_std(window_size=20, min_samples=20).over("symbol") + 1e-12)
+        ).alias("volume_z_20"),
+    ]
+    if config.primary_position_col is None:
+        base.append(
             pl.when(pl.col("log_return_lookback") > 0.0)
             .then(1.0)
             .when(pl.col("log_return_lookback") < 0.0)
             .then(-1.0)
             .otherwise(0.0)
-            .alias("primary_position"),
-        ]
-    )
+            .alias("primary_position")
+        )
+    elif config.primary_position_col != "primary_position":
+        base.append(pl.col(config.primary_position_col).alias("primary_position"))
+    df = df.with_columns(base)
+    feature_columns = (*_FEATURE_COLUMNS, *config.extra_feature_columns)
     frames: list[pl.DataFrame] = []
     for _, group in df.group_by("symbol", maintain_order=True):
         labels = label_triple_barrier(
@@ -135,13 +142,13 @@ def _feature_frame(panel: pl.DataFrame, config: MetaLabelWalkForwardConfig) -> p
         )
         frames.append(group.with_columns(pl.Series("triple_barrier_label", labels)))
     labeled = pl.concat(frames, how="vertical") if frames else pl.DataFrame()
-    finite_cols = [*_FEATURE_COLUMNS, "triple_barrier_label", "future_return_horizon"]
+    finite_cols = [*feature_columns, "triple_barrier_label", "future_return_horizon"]
     return labeled.filter(pl.all_horizontal([pl.col(c).is_finite() for c in finite_cols]))
 
 
-def _xy(frame: pl.DataFrame) -> tuple[NDArray[np.float64], NDArray[np.float64]]:
+def _xy(frame: pl.DataFrame, feature_columns: tuple[str, ...]) -> tuple[NDArray[np.float64], NDArray[np.float64]]:
     return (
-        frame.select(_FEATURE_COLUMNS).to_numpy().astype(np.float64),
+        frame.select(list(feature_columns)).to_numpy().astype(np.float64),
         frame["triple_barrier_label"].to_numpy().astype(np.float64),
     )
 
@@ -153,8 +160,9 @@ def _predict_fold(
     fold: int,
     config: MetaLabelWalkForwardConfig,
 ) -> pl.DataFrame:
-    x_train, y_train = _xy(train)
-    x_test, _ = _xy(test)
+    feature_columns = (*_FEATURE_COLUMNS, *config.extra_feature_columns)
+    x_train, y_train = _xy(train, feature_columns)
+    x_test, _ = _xy(test, feature_columns)
     wrapper = TripleBarrierWrapper(
         TripleBarrierConfig(
             vertical_barrier_days=config.triple_barrier.vertical_barrier_days,
