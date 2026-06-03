@@ -9,6 +9,7 @@ from typing import Any
 import numpy as np
 import polars as pl
 
+from quant_research_stack.crypto_research.perps.validation import deflated_sharpe_payload
 from quant_research_stack.signal_research.fingerprint_vwap.eligibility import primary_signal_stats
 from quant_research_stack.signal_research.fingerprint_vwap.fingerprint import (
     build_fingerprint_features,
@@ -82,3 +83,34 @@ def run_fingerprint_vwap_meta(*, panel: pl.DataFrame, spec: FingerprintVwapSpec)
         "predictions": result.predictions,
     })
     return out
+
+
+def gate_verdict(
+    *,
+    meta_net_sharpe: float,
+    baseline_net_sharpe: float,
+    lift_margin: float,
+    daily_net_returns: list[float],
+    trials: int,
+) -> dict[str, Any]:
+    """PASS only if net Sharpe>0, deflated-Sharpe prob>=0.95 at `trials`, and
+    lift = meta - baseline > lift_margin. Otherwise DO_NOT_ADVANCE with reasons."""
+    returns_arr = np.asarray(daily_net_returns, dtype=np.float64)
+    dsr = deflated_sharpe_payload(returns_arr, trials=trials)
+    dsr_prob = float(dsr.get("probability", 0.0))
+    lift = meta_net_sharpe - baseline_net_sharpe
+    failed: list[str] = []
+    if meta_net_sharpe <= 0.0:
+        failed.append("net_sharpe")
+    if dsr_prob < 0.95:
+        failed.append("deflated_sharpe")
+    if lift <= lift_margin:
+        failed.append("lift")
+    return {
+        "verdict": "PASS" if not failed else "DO_NOT_ADVANCE",
+        "passed": not failed,
+        "failed": failed,
+        "net_sharpe": meta_net_sharpe,
+        "lift": lift,
+        "deflated_sharpe": dsr,
+    }
