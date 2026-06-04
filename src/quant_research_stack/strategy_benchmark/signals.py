@@ -393,6 +393,104 @@ def signal_keltner_breakout(
     return df["_s"]
 
 
+def signal_volmanaged_momentum(bars: pl.DataFrame, *, lookback: int, threshold: float) -> pl.Series:
+    """Moreira & Muir (2017): momentum sign scaled by inverse realised variance."""
+    df = bars.with_columns(
+        (pl.col("close").log() - pl.col("close").shift(1).log()).alias("_r")
+    )
+    df = df.with_columns(
+        (pl.col("close").log() - pl.col("close").shift(lookback).log()).alias("_mom"),
+        pl.col("_r").rolling_std(window_size=lookback, min_samples=lookback).alias("_vol"),
+    )
+    df = df.with_columns(
+        pl.when((pl.col("_vol") > 0))
+        .then(pl.col("_mom").sign() * (0.01 / pl.col("_vol")).clip(0.0, 2.0) * (threshold / 2.5))
+        .otherwise(0.0).alias("_s")
+    )
+    return df["_s"]
+
+
+def signal_ewma_cross(bars: pl.DataFrame, *, lookback: int, threshold: float) -> pl.Series:
+    """EWMA crossover (RiskMetrics lineage): fast vs slow exponential MA."""
+    fast = max(2, lookback // 4)
+    df = bars.with_columns(
+        pl.col("close").ewm_mean(span=fast).alias("_f"),
+        pl.col("close").ewm_mean(span=lookback).alias("_sl"),
+    )
+    df = df.with_columns(
+        pl.when(pl.col("_f") > pl.col("_sl")).then(1.0 * threshold / 2.5)
+        .when(pl.col("_f") < pl.col("_sl")).then(-1.0 * threshold / 2.5)
+        .otherwise(0.0).alias("_s")
+    )
+    return df["_s"]
+
+
+def signal_atr_trailing_trend(bars: pl.DataFrame, *, lookback: int, threshold: float) -> pl.Series:
+    """Wilder (1978) ATR trend: long when close above close[lookback] by k*ATR."""
+    tr = pl.max_horizontal(
+        pl.col("high") - pl.col("low"),
+        (pl.col("high") - pl.col("close").shift(1)).abs(),
+        (pl.col("low") - pl.col("close").shift(1)).abs(),
+    )
+    df = bars.with_columns(tr.alias("_tr"))
+    df = df.with_columns(
+        pl.col("_tr").rolling_mean(window_size=lookback, min_samples=lookback).alias("_atr"),
+        (pl.col("close") - pl.col("close").shift(lookback)).alias("_chg"),
+    )
+    df = df.with_columns(
+        pl.when((pl.col("_atr") > 0) & (pl.col("_chg") > threshold * pl.col("_atr"))).then(1.0)
+        .when((pl.col("_atr") > 0) & (pl.col("_chg") < -threshold * pl.col("_atr"))).then(-1.0)
+        .otherwise(0.0).alias("_s")
+    )
+    return df["_s"]
+
+
+def signal_rolling_sharpe_mom(bars: pl.DataFrame, *, lookback: int, threshold: float) -> pl.Series:
+    """Risk-adjusted momentum: sign of rolling mean/std of returns past a threshold."""
+    df = bars.with_columns(
+        (pl.col("close").log() - pl.col("close").shift(1).log()).alias("_r")
+    )
+    df = df.with_columns(
+        (pl.col("_r").rolling_mean(window_size=lookback, min_samples=lookback)
+         / (pl.col("_r").rolling_std(window_size=lookback, min_samples=lookback) + 1e-12)).alias("_rs")
+    )
+    df = df.with_columns(
+        pl.when(pl.col("_rs") > threshold / 5.0).then(1.0)
+        .when(pl.col("_rs") < -threshold / 5.0).then(-1.0)
+        .otherwise(0.0).alias("_s")
+    )
+    return df["_s"]
+
+
+def signal_range_oscillator(bars: pl.DataFrame, *, lookback: int, threshold: float) -> pl.Series:
+    """Range trading: position from where close sits in its rolling [min,max] band."""
+    df = bars.with_columns(
+        pl.col("close").rolling_min(window_size=lookback, min_samples=lookback).alias("_lo"),
+        pl.col("close").rolling_max(window_size=lookback, min_samples=lookback).alias("_hi"),
+    )
+    df = df.with_columns(
+        pl.when(pl.col("_hi") > pl.col("_lo"))
+        .then(((pl.col("close") - pl.col("_lo")) / (pl.col("_hi") - pl.col("_lo"))) * 2.0 - 1.0)
+        .otherwise(0.0).alias("_pos01")
+    )
+    df = df.with_columns((-pl.col("_pos01") * (threshold / 2.5)).clip(-1.0, 1.0).alias("_s"))
+    return df["_s"]
+
+
+def signal_mom_skip(bars: pl.DataFrame, *, lookback: int, threshold: float) -> pl.Series:
+    """Jegadeesh-Titman echo control: momentum over [t-lookback, t-skip], skip last 5d."""
+    skip = 5
+    df = bars.with_columns(
+        (pl.col("close").shift(skip).log() - pl.col("close").shift(lookback).log()).alias("_m")
+    )
+    df = df.with_columns(
+        pl.when(pl.col("_m") > 0).then(1.0 * threshold / 2.5)
+        .when(pl.col("_m") < 0).then(-1.0 * threshold / 2.5)
+        .otherwise(0.0).alias("_s")
+    )
+    return df["_s"]
+
+
 SignalFn = Callable[[pl.DataFrame], pl.Series]
 SIGNAL_FAMILIES: dict[str, Callable[..., pl.Series]] = {
     "TS_MOMENTUM": signal_ts_momentum,
@@ -410,4 +508,10 @@ SIGNAL_FAMILIES: dict[str, Callable[..., pl.Series]] = {
     "ROC": signal_roc,
     "CCI": signal_cci,
     "KELTNER_BREAKOUT": signal_keltner_breakout,
+    "VOLMANAGED_MOMENTUM": signal_volmanaged_momentum,
+    "EWMA_CROSS": signal_ewma_cross,
+    "ATR_TRAILING_TREND": signal_atr_trailing_trend,
+    "ROLLING_SHARPE_MOM": signal_rolling_sharpe_mom,
+    "RANGE_OSCILLATOR": signal_range_oscillator,
+    "MOM_SKIP": signal_mom_skip,
 }
