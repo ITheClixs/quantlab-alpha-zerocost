@@ -35,6 +35,12 @@ UNIVERSES: tuple[BenchmarkUniverse, ...] = (
         tickers=("SPY", "QQQ", "ES=F", "NQ=F"),
         description="Equal-weighted basket of the four",
     ),
+    BenchmarkUniverse(name="IWM", tickers=("IWM",), description="Russell 2000 ETF"),
+    BenchmarkUniverse(name="DIA", tickers=("DIA",), description="Dow 30 ETF"),
+    BenchmarkUniverse(name="XLK", tickers=("XLK",), description="Technology sector SPDR"),
+    BenchmarkUniverse(name="XLF", tickers=("XLF",), description="Financials sector SPDR"),
+    BenchmarkUniverse(name="XLE", tickers=("XLE",), description="Energy sector SPDR"),
+    BenchmarkUniverse(name="EW_SECTORS", tickers=("XLK", "XLF", "XLE"), description="Equal-weight sector basket"),
 )
 
 
