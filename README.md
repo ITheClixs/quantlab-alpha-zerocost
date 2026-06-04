@@ -513,6 +513,36 @@ infrastructure, capacity-constrained niches, and portfolio construction across m
 *decayed* sleeves, none of which a free-data solo operator can manufacture from a better
 model.
 
+### 6.7 Empirical proof — a ~1M-strategy zoo with zero survivors
+
+The §6.1–6.6 results are *theory*. We also ran them as a *measured experiment*: a grid of
+**~1.06 M** systematically-enumerated single-asset strategies (21 cited signal families × 8
+lookbacks × 8 thresholds × 3 volatility estimators × 2 position modes × 3 holding periods,
+across 11 universes), each backtested net-of-cost on real 2015–2026 daily data and passed
+through PBO + Deflated Sharpe + a price-level permutation control. At the reported **N = 1,000**
+sampled tier (the conclusion only sharpens with N, since the bar grows as `√(2 ln N)`):
+
+| Measured | Value |
+|---|---:|
+| Best in-sample Sharpe | **0.96** |
+| Expected max under the null `√(2 ln N)·σ` | **1.02** (the best is *below* the chance bar) |
+| Probability of Backtest Overfitting (PBO) | **0.69** |
+| Deflated Sharpe of the best strategy | **0.44** (gate ≥ 0.95) |
+| Strategies surviving the deflated bar | **0 / 1000** |
+| Permutation MCPT p-value | **1.0** (real best 0.83 < permuted mean 1.35) |
+
+The "best" strategy sits exactly where a zero-skill search would place it — confirming the
+selection-bias mechanism of §6.1 on live backtests. Full write-up and reproduction:
+[strategy-zoo overfitting report](reports/signal_research/strategy_zoo_overfitting_v1/report.md)
+and [verdict](reports/signal_research/strategy_zoo_overfitting_v1/VERDICT.md); harness under
+`src/quant_research_stack/strategy_benchmark/zoo/`.
+
+![Strategy-zoo Sharpe distribution vs the permutation null](reports/signal_research/strategy_zoo_overfitting_v1/figures/F1_sharpe_distribution.png)
+![Theoretical expected-max vs empirical best Sharpe across tiers](reports/signal_research/strategy_zoo_overfitting_v1/figures/F2_expected_vs_empirical.png)
+![In-sample to out-of-sample Sharpe decay](reports/signal_research/strategy_zoo_overfitting_v1/figures/F3_is_oos_decay.png)
+![Overfitting panel — PBO, Deflated-Sharpe pass count, real vs permuted best](reports/signal_research/strategy_zoo_overfitting_v1/figures/F4_overfitting_panel.png)
+![Median in-sample Sharpe by family × lookback (no stable cell)](reports/signal_research/strategy_zoo_overfitting_v1/figures/F5_family_heatmap.png)
+
 ---
 
 ## 7. Reproducibility
