@@ -1,0 +1,12 @@
+{
+  "real_best_sharpe": 0.831509372256205,
+  "permuted_best_sharpe_mean": 1.3501482110391905,
+  "permuted_best_sharpes": [
+    1.365641671280637,
+    1.391266862908256,
+    1.293536098928678
+  ],
+  "p_value": 1.0,
+  "n_permutations": 3,
+  "seed": 42
+}

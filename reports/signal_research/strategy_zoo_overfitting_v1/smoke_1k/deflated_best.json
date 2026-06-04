@@ -1,0 +1,8 @@
+{
+  "selected_idx": 983,
+  "observed_sharpe": 0.9634384986853514,
+  "expected_max_under_null": 1.0197151959299855,
+  "psr_zero": 0.9962173769813564,
+  "dsr": 0.43801161975495456,
+  "n_trials": 1000
+}

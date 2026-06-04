@@ -1,0 +1,52 @@
+{
+  "n_run": 1000,
+  "wall_clock_sec": 31.3,
+  "pbo": {
+    "pbo_probability": 0.6873348873348873,
+    "median_logit": -0.5725902180208365,
+    "n_strategies": 1000,
+    "failure_rate": 0.5015540015540015
+  },
+  "best_is_sharpe": 0.9634385587945873,
+  "median_is_sharpe": 0.16334498441843287,
+  "best_oos_sharpe": 1.7985013641288559,
+  "median_oos_sharpe": 0.4719993495561734,
+  "dsr": {
+    "selected_idx": 983,
+    "observed_sharpe": 0.9634384986853514,
+    "expected_max_under_null": 1.0197151959299855,
+    "psr_zero": 0.9962173769813564,
+    "dsr": 0.43801161975495456,
+    "n_trials": 1000
+  },
+  "tiers": [
+    {
+      "n_trials": 1000,
+      "empirical_max": 0.9634385587945873,
+      "theoretical_max": 1.0197151938397038
+    }
+  ],
+  "permutation": {
+    "real_best_sharpe": 0.831509372256205,
+    "permuted_best_sharpe_mean": 1.3501482110391905,
+    "permuted_best_sharpes": [
+      1.365641671280637,
+      1.391266862908256,
+      1.293536098928678
+    ],
+    "p_value": 1.0,
+    "n_permutations": 3,
+    "seed": 42
+  },
+  "dsr_pass_count": 0,
+  "dsr_pass_threshold": 1.0197151938397038,
+  "args": {
+    "start": "2015-01-01",
+    "end": "2026-06-04",
+    "max_strategies": 1000,
+    "oos_fraction": 0.3,
+    "embargo_days": 10,
+    "perm_max_strategies": 500,
+    "perm_n": 3
+  }
+}
