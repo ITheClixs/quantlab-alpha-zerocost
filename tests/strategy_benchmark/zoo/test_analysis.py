@@ -3,7 +3,8 @@ from __future__ import annotations
 import numpy as np
 
 from quant_research_stack.strategy_benchmark.zoo.analysis import (
-    deflate_best, expected_vs_empirical,
+    deflate_best,
+    expected_vs_empirical,
 )
 
 

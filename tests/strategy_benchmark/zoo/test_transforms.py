@@ -1,10 +1,11 @@
 from __future__ import annotations
 
-import numpy as np
 import polars as pl
 
 from quant_research_stack.strategy_benchmark.zoo.transforms import (
-    apply_holding, apply_position_mode, apply_vol_target,
+    apply_holding,
+    apply_position_mode,
+    apply_vol_target,
 )
 
 

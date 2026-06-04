@@ -5,7 +5,8 @@ import polars as pl
 
 from quant_research_stack.strategy_benchmark.zoo.grid import GridConfig
 from quant_research_stack.strategy_benchmark.zoo.permutation import (
-    permutation_control, permute_prices,
+    permutation_control,
+    permute_prices,
 )
 
 

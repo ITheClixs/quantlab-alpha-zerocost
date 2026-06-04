@@ -16,7 +16,9 @@ from quant_research_stack.strategy_benchmark.pbo import compute_pbo
 from quant_research_stack.strategy_benchmark.signals import SIGNAL_FAMILIES
 from quant_research_stack.strategy_benchmark.zoo.grid import GridConfig, ZooStrategySpec, enumerate_zoo
 from quant_research_stack.strategy_benchmark.zoo.transforms import (
-    apply_holding, apply_position_mode, apply_vol_target,
+    apply_holding,
+    apply_position_mode,
+    apply_vol_target,
 )
 from quant_research_stack.strategy_benchmark.zoo.vol_estimators import rolling_vol
 
@@ -54,14 +56,17 @@ def run_zoo(*, universes: dict[str, pl.DataFrame], grid: GridConfig,
     is_rows = list(range(0, split))
     oos_rows = list(range(min(split + embargo_days, T), T))
     full = np.zeros((T, len(specs)), dtype=np.float32)
-    is_sharpe = np.zeros(len(specs)); oos_sharpe = np.zeros(len(specs)); turn = np.zeros(len(specs))
+    is_sharpe = np.zeros(len(specs))
+    oos_sharpe = np.zeros(len(specs))
+    turn = np.zeros(len(specs))
     for j, spec in enumerate(specs):
         bars = universes[spec.universe]
         sig = build_signal(bars, spec)
         res = run_single_asset_backtest(bars=bars, signals=sig, cost=cost)
         for k, d in enumerate(bars["date"].to_list()):
             full[idx[d], j] = np.float32(res.daily_net_return[k])
-        is_sharpe[j] = _ann_sharpe(full[is_rows, j]); oos_sharpe[j] = _ann_sharpe(full[oos_rows, j])
+        is_sharpe[j] = _ann_sharpe(full[is_rows, j].astype(np.float64))
+        oos_sharpe[j] = _ann_sharpe(full[oos_rows, j].astype(np.float64))
         turn[j] = res.annual_turnover
     metrics = pl.DataFrame({
         "strategy_id": [s.strategy_id for s in specs],
@@ -71,7 +76,8 @@ def run_zoo(*, universes: dict[str, pl.DataFrame], grid: GridConfig,
         "holding": [s.holding for s in specs], "is_sharpe": is_sharpe, "oos_sharpe": oos_sharpe,
         "annual_turnover": turn,
     })
-    is_mat = full[is_rows]; oos_mat = full[oos_rows]
+    is_mat = full[is_rows]
+    oos_mat = full[oos_rows]
     pbo = _pbo_dict(compute_pbo(returns=is_mat.astype(np.float64), n_partitions=n_partitions))
     return ZooResult(specs, metrics, is_mat, oos_mat, pbo, time.perf_counter() - t0)
 

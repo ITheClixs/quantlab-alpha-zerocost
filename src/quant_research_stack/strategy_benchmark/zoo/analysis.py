@@ -25,7 +25,8 @@ def expected_vs_empirical(*, sharpe_estimates: NDArray[np.float64],
 
 def deflate_best(*, is_returns: NDArray[np.float64]) -> dict[str, Any]:
     r = is_returns.astype(np.float64)
-    mu = np.mean(r, axis=0); sd = np.std(r, axis=0, ddof=1)
+    mu = np.mean(r, axis=0)
+    sd = np.std(r, axis=0, ddof=1)
     sd[sd == 0.0] = np.nan
     sr = np.nan_to_num(mu / sd * np.sqrt(252.0), nan=0.0, posinf=0.0, neginf=0.0)
     best = int(np.argmax(sr))

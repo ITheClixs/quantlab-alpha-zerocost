@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 from quant_research_stack.strategy_benchmark.zoo.grid import (
-    DEFAULT_GRID, GridConfig, ZooStrategySpec, enumerate_zoo,
+    DEFAULT_GRID,
+    GridConfig,
+    enumerate_zoo,
 )
 
 

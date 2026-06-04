@@ -29,7 +29,9 @@ def permute_prices(bars: pl.DataFrame, *, rng: np.random.Generator) -> pl.DataFr
         # Compute the n-1 actual log returns (index 1..n-1)
         actual_ret = np.log(c[1:] / c[:-1])
         # intraday ratios relative to that day's close
-        hi_r = h / c; lo_r = low / c; op_r = o / c
+        hi_r = h / c
+        lo_r = low / c
+        op_r = o / c
         # Permute only the n-1 actual returns; day-0 level stays anchored
         perm_ret = rng.permutation(n - 1)
         # Build a full-length permutation index for intraday ratios:
